@@ -27,17 +27,18 @@
 #include <functional>
 #include <sstream>
 
-namespace VAAPI {
+namespace VAAPI
+{
 
 // The following tests will operate on supported profile/entrypoint
 // combinations that the driver does support.
 
 class VAAPISurfaceFixture
-    : public VAAPIFixture
+    : public VAAPIFixtureSharedDisplay
 {
 public:
     VAAPISurfaceFixture(const VAProfile& p, const VAEntrypoint& e)
-        : VAAPIFixture()
+        : VAAPIFixtureSharedDisplay()
         , profile(p)
         , entrypoint(e)
     { }
@@ -45,19 +46,6 @@ public:
 protected:
     const VAProfile& profile;
     const VAEntrypoint& entrypoint;
-
-    virtual void SetUp()
-    {
-        VAAPIFixture::SetUp();
-        doInitialize();
-        ASSERT_FALSE(HasFailure());
-    }
-
-    virtual void TearDown()
-    {
-        doTerminate();
-        VAAPIFixture::TearDown();
-    }
 
     void testWithSupportedConfigAttributes(
         const std::function<void (const ConfigAttributes&)>& test)
@@ -74,7 +62,7 @@ protected:
                 for (const auto mask : masks) { // for all bitmasks
                     if ((attrib.value & mask) == mask) { // supported value
                         const ConfigAttributes attribs(
-                            1, {type : attrib.type, value : mask });
+                            1, {/*type :*/ attrib.type, /*value :*/ mask });
                         SCOPED_TRACE(attribs.front());
                         createConfig(profile, entrypoint, attribs);
                         test(attribs);
@@ -99,8 +87,11 @@ protected:
         querySurfaceAttributes(supported);
 
         const uint32_t drmMemMask = VA_SURFACE_ATTRIB_MEM_TYPE_KERNEL_DRM
-            | VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME
-            | VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2;
+                                    | VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME
+#if VA_CHECK_VERSION(1, 21, 0)
+                                    | VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_3
+#endif
+                                    | VA_SURFACE_ATTRIB_MEM_TYPE_DRM_PRIME_2;
 
         // create surfaces for each supported attribute
         for (const auto& attrib : supported) {
@@ -116,7 +107,7 @@ protected:
                         bitfield |= mask;
 
                         if ((attrib.type == VASurfaceAttribMemoryType)
-                            and (drmMemMask & mask) == mask) {
+                            && (drmMemMask & mask) == mask) {
                             // skip drm memory types for now as it requires much
                             // more setup
                             continue;
@@ -141,8 +132,8 @@ protected:
     }
 };
 
-typedef ::testing::WithParamInterface<
-    std::tuple<VAProfile, VAEntrypoint> > QuerySurfacesParamInterface;
+typedef ::testing::WithParamInterface <
+std::tuple<VAProfile, VAEntrypoint> > QuerySurfacesParamInterface;
 
 class VAAPIQuerySurfaces
     : public QuerySurfacesParamInterface
@@ -152,19 +143,19 @@ public:
     VAAPIQuerySurfaces()
         : QuerySurfacesParamInterface()
         , VAAPISurfaceFixture(
-            ::testing::get<0>(GetParam()),
-            ::testing::get<1>(GetParam()))
+              ::testing::get<0>(GetParam()),
+              ::testing::get<1>(GetParam()))
     { }
 };
 
 TEST_P(VAAPIQuerySurfaces, QuerySurfacesWithConfigAttribs)
 {
-    if (not isSupported(profile, entrypoint)) {
+    if (!isSupported(profile, entrypoint)) {
         skipTest(profile, entrypoint);
         return;
     }
 
-    const auto test = [&](const ConfigAttributes& ca) {
+    const auto test = [&](const ConfigAttributes & ca) {
         SurfaceAttributes attribs;
         querySurfaceAttributes(attribs);
     };
@@ -174,7 +165,7 @@ TEST_P(VAAPIQuerySurfaces, QuerySurfacesWithConfigAttribs)
 
 TEST_P(VAAPIQuerySurfaces, QuerySurfacesNoConfigAttribs)
 {
-    if (not isSupported(profile, entrypoint)) {
+    if (!isSupported(profile, entrypoint)) {
         skipTest(profile, entrypoint);
         return;
     }
@@ -185,13 +176,13 @@ TEST_P(VAAPIQuerySurfaces, QuerySurfacesNoConfigAttribs)
     destroyConfig();
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     QuerySurfaces, VAAPIQuerySurfaces,
     ::testing::Combine(::testing::ValuesIn(g_vaProfiles),
-        ::testing::ValuesIn(g_vaEntrypoints)));
+                       ::testing::ValuesIn(g_vaEntrypoints)));
 
 typedef typename ::testing::WithParamInterface<std::tuple<
-    VAProfile, VAEntrypoint, Resolution>> CreateSurfacesParamInterface;
+VAProfile, VAEntrypoint, Resolution>> CreateSurfacesParamInterface;
 
 class VAAPICreateSurfaces
     : public CreateSurfacesParamInterface
@@ -201,8 +192,8 @@ public:
     VAAPICreateSurfaces()
         : CreateSurfacesParamInterface()
         , VAAPISurfaceFixture(
-            ::testing::get<0>(GetParam()),
-            ::testing::get<1>(GetParam()))
+              ::testing::get<0>(GetParam()),
+              ::testing::get<1>(GetParam()))
         , resolution(::testing::get<2>(GetParam()))
     { }
 
@@ -212,7 +203,7 @@ protected:
 
 TEST_P(VAAPICreateSurfaces, CreateSurfacesWithConfigAttribs)
 {
-    if (not isSupported(profile, entrypoint)) {
+    if (!isSupported(profile, entrypoint)) {
         skipTest(profile, entrypoint);
         return;
     }
@@ -221,16 +212,17 @@ TEST_P(VAAPICreateSurfaces, CreateSurfacesWithConfigAttribs)
     // drivers
     unsigned format = VA_RT_FORMAT_YUV420;
 
-    const auto testSurfaces = [&](const SurfaceAttributes& attribs) {
+    const auto testSurfaces = [&](const SurfaceAttributes & attribs) {
         Surfaces surfaces(10, VA_INVALID_SURFACE);
         createSurfaces(surfaces, format, resolution, attribs);
         destroySurfaces(surfaces);
     };
 
-    const auto test = [&](const ConfigAttributes& attribs) {
+    const auto test = [&](const ConfigAttributes & attribs) {
         const auto match = std::find_if(attribs.begin(), attribs.end(),
-            [](const VAConfigAttrib& a)
-                { return a.type == VAConfigAttribRTFormat; });
+        [](const VAConfigAttrib & a) {
+            return a.type == VAConfigAttribRTFormat;
+        });
         if (match != attribs.end()) {
             format = match->value;
         }
@@ -245,12 +237,12 @@ TEST_P(VAAPICreateSurfaces, CreateSurfacesWithConfigAttribs)
 
 TEST_P(VAAPICreateSurfaces, CreateSurfacesNoConfigAttrib)
 {
-    if (not isSupported(profile, entrypoint)) {
+    if (!isSupported(profile, entrypoint)) {
         skipTest(profile, entrypoint);
         return;
     }
 
-    const auto test = [&](const SurfaceAttributes& attribs) {
+    const auto test = [&](const SurfaceAttributes & attribs) {
         Surfaces surfaces(10, VA_INVALID_SURFACE);
         createSurfaces(surfaces, VA_RT_FORMAT_YUV420, resolution, attribs);
         destroySurfaces(surfaces);
@@ -263,7 +255,7 @@ TEST_P(VAAPICreateSurfaces, CreateSurfacesNoConfigAttrib)
 
 TEST_P(VAAPICreateSurfaces, CreateSurfacesNoAttrib)
 {
-    if (not isSupported(profile, entrypoint)) {
+    if (!isSupported(profile, entrypoint)) {
         skipTest(profile, entrypoint);
         return;
     }
@@ -275,10 +267,10 @@ TEST_P(VAAPICreateSurfaces, CreateSurfacesNoAttrib)
     destroyConfig();
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     CreateSurfaces, VAAPICreateSurfaces,
     ::testing::Combine(::testing::ValuesIn(g_vaProfiles),
-        ::testing::ValuesIn(g_vaEntrypoints),
-        ::testing::ValuesIn(g_vaResolutions)));
+                       ::testing::ValuesIn(g_vaEntrypoints),
+                       ::testing::ValuesIn(g_vaResolutions)));
 
 } // namespace VAAPI

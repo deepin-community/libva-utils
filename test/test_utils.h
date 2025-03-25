@@ -27,30 +27,30 @@
 
 #include <iostream>
 
-namespace VAAPI {
-
-struct Resolution
+namespace VAAPI
 {
+
+struct Resolution {
     typedef uint32_t DataType;
 
     Resolution(const DataType w = 1, const DataType h = 1)
-      : width(w), height(h)
+        : width(w), height(h)
     { }
 
     inline bool operator <=(const Resolution& other) const
     {
-        return (width <= other.width) and (height <= other.height);
+        return (width <= other.width) && (height <= other.height);
     }
 
     inline bool operator >=(const Resolution& other) const
     {
-        return (width >= other.width) and (height >= other.height);
+        return (width >= other.width) && (height >= other.height);
     }
 
     inline bool isWithin(
         const Resolution& minRes, const Resolution& maxRes) const
     {
-        return (*this >= minRes) and (*this <= maxRes);
+        return (*this >= minRes) && (*this <= maxRes);
     }
 
     friend std::ostream& operator <<(std::ostream& os, const Resolution& res)

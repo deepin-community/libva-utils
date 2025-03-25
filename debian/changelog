@@ -1,8 +1,29 @@
-libva-utils (2.12.0+ds1-1) UNRELEASED; urgency=medium
+libva-utils (2.22.0+ds1-2) unstable; urgency=medium
 
-  * update
+  * debian/control:
+    - Bump Standards-Version
+    - Add libdrm-dev to BD (Closes: #1100151)
 
- -- Debian Multimedia Maintainers <debian-multimedia@lists.debian.org>  Thu, 28 Apr 2022 06:22:08 -0400
+ -- Sebastian Ramacher <sramacher@debian.org>  Tue, 11 Mar 2025 23:07:39 +0100
+
+libva-utils (2.22.0+ds1-1) unstable; urgency=medium
+
+  [ Debian Janitor ]
+  * Set upstream metadata fields: Bug-Database, Bug-Submit (from ./configure).
+  * Remove constraints unnecessary since buster
+
+  [ David Heidelberg ]
+  * Bump Standards-Version
+  * d/watch: fix url, since checking releases no longer works
+  * d/rules: switch to meson
+
+  [ Sebastian Ramacher ]
+  * New upstream version 2.22.0+ds1
+  * debian/control:
+    - Bump Standards-Version
+    - Use pkgconf
+
+ -- Sebastian Ramacher <sramacher@debian.org>  Sun, 01 Sep 2024 18:38:36 +0200
 
 libva-utils (2.12.0+ds1-1) unstable; urgency=medium
 

@@ -26,7 +26,8 @@
 
 #include <sstream>
 
-namespace VAAPI {
+namespace VAAPI
+{
 
 class VAAPIGetCreateConfig
     : public VAAPIFixture
@@ -90,19 +91,19 @@ TEST_P(VAAPIGetCreateConfig, CreateConfigWithAttributes)
                     // supported value
                     bitfield |= mask;
                     createConfig(profile, entrypoint,
-                        ConfigAttributes(
-                            1, {type : attrib.type, value : mask }));
+                                 ConfigAttributes(
+                                     1, {/*type :*/ attrib.type, /*value :*/ mask }));
                     destroyConfig();
                 } else {
                     // unsupported value
                     const VAStatus expectation(
-                      (attrib.type == VAConfigAttribRTFormat) ?
-                          VA_STATUS_ERROR_UNSUPPORTED_RT_FORMAT :
-                          VA_STATUS_ERROR_INVALID_VALUE);
+                        (attrib.type == VAConfigAttribRTFormat) ?
+                        VA_STATUS_ERROR_UNSUPPORTED_RT_FORMAT :
+                        VA_STATUS_ERROR_INVALID_VALUE);
                     createConfig(profile, entrypoint,
-                        ConfigAttributes(
-                            1, {type : attrib.type, value : mask}),
-                        expectation);
+                                 ConfigAttributes(
+                                     1, {/*type :*/ attrib.type, /*value :*/ mask}),
+                                 expectation);
                     destroyConfig(VA_STATUS_ERROR_INVALID_CONFIG);
                 }
             }
@@ -138,19 +139,20 @@ TEST_P(VAAPIGetCreateConfig, CreateConfigNoAttributes)
 
 TEST_P(VAAPIGetCreateConfig, CreateConfigPackedHeaders)
 {
-    if (not isSupported(profile, entrypoint)) {
+    if (!isSupported(profile, entrypoint)) {
         skipTest(profile, entrypoint);
         return;
     }
 
-    ConfigAttributes packedHeaders{{.type = VAConfigAttribEncPackedHeaders}};
+    ConfigAttributes packedHeaders{{/*.type = */VAConfigAttribEncPackedHeaders}};
     getConfigAttributes(profile, entrypoint, packedHeaders);
 
     for (uint32_t v(0x00); v < 0xff; ++v) {
         ConfigAttributes attribs = {{
-            .type = VAConfigAttribEncPackedHeaders,
-            .value = v
-        }};
+                /*.type = */VAConfigAttribEncPackedHeaders,
+                /*.value = */v
+            }
+        };
         if ((VA_ATTRIB_NOT_SUPPORTED == packedHeaders.front().value)
             || (v & ~packedHeaders.front().value)) {
             // Creating a config should fail if attribute is not supported
@@ -167,7 +169,7 @@ TEST_P(VAAPIGetCreateConfig, CreateConfigPackedHeaders)
     }
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     GetCreateConfig, VAAPIGetCreateConfig,
     ::testing::Combine(::testing::ValuesIn(g_vaProfiles),
                        ::testing::ValuesIn(g_vaEntrypoints)));

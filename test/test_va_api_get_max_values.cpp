@@ -24,24 +24,12 @@
 
 #include "test_va_api_fixture.h"
 
-namespace VAAPI {
+namespace VAAPI
+{
 
 class VAAPIGetMaxValues
-    : public VAAPIFixture
+    : public VAAPIFixtureSharedDisplay
 {
-protected:
-    virtual void SetUp()
-    {
-        VAAPIFixture::SetUp();
-        doInitialize();
-        ASSERT_FALSE(HasFailure());
-    }
-
-    virtual void TearDown()
-    {
-        doTerminate();
-        VAAPIFixture::TearDown();
-    }
 };
 
 TEST_F(VAAPIGetMaxValues, CheckMaxProfile)

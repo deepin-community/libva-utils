@@ -26,7 +26,8 @@
 
 #include <sstream>
 
-namespace VAAPI {
+namespace VAAPI
+{
 
 typedef VAAPIFixture VAAPICreateContextToFail;
 
@@ -43,8 +44,8 @@ TEST_F(VAAPICreateContextToFail, CreateContextWithNoConfig)
 
 class VAAPICreateContext
     : public VAAPIFixture
-    , public ::testing::WithParamInterface<
-          std::tuple<VAProfile, VAEntrypoint, Resolution> >
+    , public ::testing::WithParamInterface <
+      std::tuple<VAProfile, VAEntrypoint, Resolution> >
 {
 public:
     VAAPICreateContext()
@@ -77,7 +78,7 @@ TEST_P(VAAPICreateContext, CreateContext)
     // vaCreateContext requires a valid VAConfigID, vaCreateConfig requires a
     // supported profile and entrypoint
 
-    if (not isSupported(profile, entrypoint)) {
+    if (!isSupported(profile, entrypoint)) {
         skipTest(profile, entrypoint);
         return;
     }
@@ -93,7 +94,7 @@ TEST_P(VAAPICreateContext, CreateContext)
         << "; current=" << resolution;
     SCOPED_TRACE(oss.str());
 
-    if (not resolution.isWithin(minRes, maxRes)) {
+    if (!resolution.isWithin(minRes, maxRes)) {
         doCreateContext(resolution, VA_STATUS_ERROR_RESOLUTION_NOT_SUPPORTED);
         doDestroyContext(VA_STATUS_ERROR_INVALID_CONTEXT);
     } else {
@@ -104,10 +105,10 @@ TEST_P(VAAPICreateContext, CreateContext)
     destroyConfig();
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     CreateContext, VAAPICreateContext,
     ::testing::Combine(::testing::ValuesIn(g_vaProfiles),
-        ::testing::ValuesIn(g_vaEntrypoints),
-        ::testing::ValuesIn(g_vaResolutions)));
+                       ::testing::ValuesIn(g_vaEntrypoints),
+                       ::testing::ValuesIn(g_vaResolutions)));
 
 } // namespace VAAPI
