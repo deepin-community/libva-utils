@@ -47,6 +47,13 @@
         exit(1);                                                        \
     }
 
+#define CHECK_CONDITION(cond)                                                \
+    if(!(cond))                                                              \
+    {                                                                        \
+        fprintf(stderr, "Unexpected condition: %s:%d\n", __func__, __LINE__);\
+        exit(1);                                                             \
+    }
+
 #include "loadsurface.h"
 
 #define NAL_REF_IDC_NONE        0
@@ -60,8 +67,7 @@
 #define FRAME_IDR 7
 
 // SLICE TYPE HEVC ENUM
-enum
-{
+enum {
     SLICE_B = 0,
     SLICE_P = 1,
     SLICE_I = 2,
@@ -79,12 +85,11 @@ enum
 #define PROFILE_IDC_MAIN10      2
 
 #define BITSTREAM_ALLOCATE_STEPPING     4096
-#define LCU_SIZE 32
+static  int LCU_SIZE = 32;
 
 #define SURFACE_NUM 16 /* 16 surfaces for source YUV */
 #define SURFACE_NUM 16 /* 16 surfaces for reference */
-enum NALUType
-{
+enum NALUType {
     NALU_TRAIL_N        = 0x00, // Coded slice segment of a non-TSA, non-STSA trailing picture - slice_segment_layer_rbsp, VLC
     NALU_TRAIL_R        = 0x01, // Coded slice segment of a non-TSA, non-STSA trailing picture - slice_segment_layer_rbsp, VLC
     NALU_TSA_N          = 0x02, // Coded slice segment of a TSA picture - slice_segment_layer_rbsp, VLC
@@ -125,8 +130,7 @@ enum NALUType
 #define MAX_LAYER_ID                   64
 #define MAX_LONGTERM_REF_PIC           32
 #define NUM_OF_EXTRA_SLICEHEADER_BITS  3
-struct ProfileTierParamSet
-{
+struct ProfileTierParamSet {
     uint8_t      general_profile_space;                                        //u(2)
     int          general_tier_flag;                                            //u(1)
     uint8_t      general_profile_idc;                                          //u(5)
@@ -140,8 +144,7 @@ struct ProfileTierParamSet
     uint8_t      general_level_idc;                                            //u(8)
 };
 // Video parameter set structure
-struct VideoParamSet
-{
+struct VideoParamSet {
     uint8_t       vps_video_parameter_set_id;                                   //u(4)
     int           vps_base_layer_internal_flag;                                 //u(1)
     int           vps_base_layer_available_flag;                                //u(1)
@@ -174,8 +177,7 @@ struct VideoParamSet
     int           vps_extension_data_flag;                                      //u(1)
 };
 
-struct ShortTermRefPicParamSet
-{
+struct ShortTermRefPicParamSet {
     int         inter_ref_pic_set_prediction_flag;                               //u(1)
     uint32_t    delta_idx_minus1;                                               //ue(v)
     uint8_t     delta_rps_sign;                                                 //u(1)
@@ -189,8 +191,7 @@ struct ShortTermRefPicParamSet
     uint32_t    delta_poc_s1_minus1[32];                                        //ue(v)
     uint8_t     used_by_curr_pic_s1_flag[32];                                   //u(1)
 };
-struct SeqParamSet
-{
+struct SeqParamSet {
     uint8_t     sps_video_parameter_set_id;                                     //u(4)
     uint8_t     sps_max_sub_layers_minus1;                                      //u(3)
     int         sps_temporal_id_nesting_flag;                                   //u(1)
@@ -249,8 +250,7 @@ struct SeqParamSet
     uint8_t     sps_extension_5bits;                                           //u(5)
     int         sps_extension_data_flag;                                        //u(1)
 };
-struct PicParamSet
-{
+struct PicParamSet {
     uint32_t    pps_pic_parameter_set_id;                                       //ue(v)
     uint32_t    pps_seq_parameter_set_id;                                       //ue(v)
     int         dependent_slice_segments_enabled_flag;                          //u(1)
@@ -305,8 +305,7 @@ struct PicParamSet
     uint32_t    log2_sao_offset_scale_luma;                                     //ue(v)
     uint32_t    log2_sao_offset_scale_chroma;                                   //ue(v)
 };
-struct SliceHeader
-{
+struct SliceHeader {
     int         first_slice_segment_in_pic_flag;                                //u(1)
     int         no_output_of_prior_pics_flag;                                   //u(1)
     uint32_t    slice_pic_parameter_set_id;                                     //ue(v)
@@ -375,14 +374,52 @@ struct SliceHeader
     uint8_t     *slice_segment_header_extension_data_byte;                      //u(8)
 };
 
+struct BlockSizes {
+    uint32_t log2_max_coding_tree_block_size_minus3;
+    uint32_t log2_min_coding_tree_block_size_minus3;
+    uint32_t log2_min_luma_coding_block_size_minus3;
+    uint32_t log2_max_luma_transform_block_size_minus2;
+    uint32_t log2_min_luma_transform_block_size_minus2;
+    uint32_t log2_max_pcm_coding_block_size_minus3;
+    uint32_t log2_min_pcm_coding_block_size_minus3;
+    uint32_t max_max_transform_hierarchy_depth_inter;
+    uint32_t min_max_transform_hierarchy_depth_inter;
+    uint32_t max_max_transform_hierarchy_depth_intra;
+    uint32_t min_max_transform_hierarchy_depth_intra;
+};
+
+struct Features {
+    uint32_t amp; //sps->amp_enable_flag
+    uint32_t constrained_intra_pred;
+    uint32_t cu_qp_delta; // pps->cu_qp_delta_enabled_flag
+    uint32_t deblocking_filter_disable;
+    uint32_t dependent_slices;
+    uint32_t pcm; // sps->pcm_enable_flag
+    uint32_t sao; //sps->sample_adaptive_offset_enabled_flag
+    uint32_t scaling_lists;
+    uint32_t separate_colour_planes;
+    uint32_t sign_data_hiding;
+    uint32_t strong_intra_smoothing;
+    uint32_t temporal_mvp; //sps->sps_temporal_mvp_enabled_flag
+    uint32_t transform_skip; // pps->transform_skip_enabled_flag
+    uint32_t transquant_bypass;
+    uint32_t weighted_prediction;
+};
+
 static  struct VideoParamSet vps;
 static  struct SeqParamSet sps;
 static  struct PicParamSet pps;
 static  struct SliceHeader ssh;
+static  struct BlockSizes block_sizes;
+static  int use_block_sizes = 0;
+static  struct Features features;
+static  int use_features = 0;
 static  VADisplay va_dpy;
 static  VAProfile hevc_profile = ~0;
 static  int real_hevc_profile = 0;
+static  VAEntrypoint entryPoint = VAEntrypointEncSlice;
 static  int p2b = 1;
+static  int lowpower = 0;
 static  VAConfigAttrib attrib[VAConfigAttribTypeMax];
 static  VAConfigAttrib config_attrib[VAConfigAttribTypeMax];
 static  int config_attrib_num = 0, enc_packed_header_idx;
@@ -399,7 +436,7 @@ static  VAEncSliceParameterBufferHEVC slice_param;
 static  VAPictureHEVC CurrentCurrPic;
 static  VAPictureHEVC ReferenceFrames[16], RefPicList0_P[32], RefPicList0_B[32], RefPicList1_B[32];
 
-static  unsigned int MaxPicOrderCntLsb = (2<<8);
+static  unsigned int MaxPicOrderCntLsb = (2 << 8);
 
 static  unsigned int num_ref_frames = 2;
 static  unsigned int num_active_ref_p = 1;
@@ -467,13 +504,13 @@ static  pthread_cond_t  encode_cond = PTHREAD_COND_INITIALIZER;
 static  pthread_t encode_thread;
 
 /* for performance profiling */
-static unsigned int UploadPictureTicks=0;
-static unsigned int BeginPictureTicks=0;
-static unsigned int RenderPictureTicks=0;
-static unsigned int EndPictureTicks=0;
-static unsigned int SyncPictureTicks=0;
-static unsigned int SavePictureTicks=0;
-static unsigned int TotalTicks=0;
+static unsigned int UploadPictureTicks = 0;
+static unsigned int BeginPictureTicks = 0;
+static unsigned int RenderPictureTicks = 0;
+static unsigned int EndPictureTicks = 0;
+static unsigned int SyncPictureTicks = 0;
+static unsigned int SavePictureTicks = 0;
+static unsigned int TotalTicks = 0;
 
 struct __bitstream {
     unsigned int *buffer;
@@ -600,16 +637,16 @@ rbsp_trailing_bits(bitstream *bs)
 
 static void nal_start_code_prefix(bitstream *bs, int nal_unit_type)
 {
-    if(nal_unit_type == NALU_VPS ||
-       nal_unit_type == NALU_SPS ||
-       nal_unit_type == NALU_PPS ||
-       nal_unit_type == NALU_AUD)
+    if (nal_unit_type == NALU_VPS ||
+        nal_unit_type == NALU_SPS ||
+        nal_unit_type == NALU_PPS ||
+        nal_unit_type == NALU_AUD)
         put_ui(bs, 0x00000001, 32);
     else
         put_ui(bs, 0x000001, 24);
 }
 
-static void nal_header(bitstream *bs,int nal_unit_type)
+static void nal_header(bitstream *bs, int nal_unit_type)
 {
     put_ui(bs, 0, 1);                /* forbidden_zero_bit: 0 */
     put_ui(bs, nal_unit_type, 6);
@@ -662,7 +699,7 @@ static void fill_profile_tier_level(
     ptps->general_profile_space = 0;
     ptps->general_tier_flag = 0;
     ptps->general_profile_idc = real_hevc_profile;
-    memset(ptps->general_profile_compatibility_flag,0,32*sizeof(int));
+    memset(ptps->general_profile_compatibility_flag, 0, 32 * sizeof(int));
     ptps->general_profile_compatibility_flag[ptps->general_profile_idc] = 1;
     ptps->general_progressive_source_flag = 1;
     ptps->general_interlaced_source_flag = 0;
@@ -670,7 +707,7 @@ static void fill_profile_tier_level(
     ptps->general_frame_only_constraint_flag = 1;
 
     ptps->general_level_idc = 30;
-    ptps->general_level_idc = ptps->general_level_idc * 3;
+    ptps->general_level_idc = ptps->general_level_idc * 4;
 
 }
 static void fill_vps_header(struct VideoParamSet *vps)
@@ -685,14 +722,13 @@ static void fill_vps_header(struct VideoParamSet *vps)
     vps->vps_max_sub_layers_minus1 = 0; // max temporal layer minus 1
     vps->vps_temporal_id_nesting_flag = 1;
     vps->vps_reserved_0xffff_16bits = 0xFFFF;
-   // hevc::ProfileTierParamSet ptps;
+    // hevc::ProfileTierParamSet ptps;
     memset(&vps->ptps, 0, sizeof(vps->ptps));
     fill_profile_tier_level(vps->vps_max_layers_minus1, &protier_param, 1);
     vps->vps_sub_layer_ordering_info_present_flag = 0;
-    for (i = 0; i < MAX_TEMPORAL_SUBLAYERS; i++)
-    {
+    for (i = 0; i < MAX_TEMPORAL_SUBLAYERS; i++) {
         vps->vps_max_dec_pic_buffering_minus1[i] = intra_period == 1 ? 1 : 6;
-        vps->vps_max_num_reorder_pics[i] = ip_period != 0 ? ip_period -1 : 0;
+        vps->vps_max_num_reorder_pics[i] = ip_period != 0 ? ip_period - 1 : 0;
         vps->vps_max_latency_increase_plus1[i] = 0;
     }
     vps->vps_max_layer_id = 0;
@@ -722,24 +758,18 @@ static void fill_short_term_ref_pic_header(
     int num_positive_pics = ip_period > 1 ? 1 : 0;
     strp->num_positive_pics = strp_index == 0 ? 0 : num_positive_pics;
 
-    if (strp_index == 0)
-    {
-        for (i = 0; i < strp->num_negative_pics; i++)
-        {
+    if (strp_index == 0) {
+        for (i = 0; i < strp->num_negative_pics; i++) {
             strp->delta_poc_s0_minus1[i] = ip_period - 1;
             strp->used_by_curr_pic_s0_flag[i] = 1;
         }
-    }
-    else
-    {
-        for (i = 0; i < strp->num_negative_pics; i++)
-        {
+    } else {
+        for (i = 0; i < strp->num_negative_pics; i++) {
             strp->delta_poc_s0_minus1[i] = (i == 0) ?
-              (strp_index - 1) : (ip_period - 1);
+                                           (strp_index - 1) : (ip_period - 1);
             strp->used_by_curr_pic_s0_flag[i] = 1;
         }
-        for (i = 0; i < strp->num_positive_pics; i++)
-        {
+        for (i = 0; i < strp->num_positive_pics; i++) {
             strp->delta_poc_s1_minus1[i] = ip_period - 1 - strp_index;
             strp->used_by_curr_pic_s1_flag[i] = 1;
         }
@@ -758,22 +788,19 @@ void fill_sps_header(struct  SeqParamSet *sps, int id)
     fill_profile_tier_level(sps->sps_max_sub_layers_minus1, &sps->ptps, 1);
     sps->sps_seq_parameter_set_id = id;
     sps->chroma_format_idc = 1;
-    if (sps->chroma_format_idc == 3)
-    {
-        sps->separate_colour_plane_flag = 0;
+    if (sps->chroma_format_idc == 3) {
+        sps->separate_colour_plane_flag = use_features ? features.separate_colour_planes : 0;
     }
     frame_width_aligned = ALIGN16(frame_width);
     frame_height_aligned = ALIGN16(frame_height);
     sps->pic_width_in_luma_samples = frame_width_aligned;
     sps->pic_height_in_luma_samples = frame_height_aligned;
     if (frame_width_aligned != frame_width ||
-        frame_height_aligned != frame_height)
-    {
+        frame_height_aligned != frame_height) {
         sps->conformance_window_flag = 1;
         sps->conf_win_left_offset = 0;
         sps->conf_win_top_offset = 0;
-        switch (sps->chroma_format_idc)
-        {
+        switch (sps->chroma_format_idc) {
         case 0:
         case 3:  // 4:4:4 format
             sps->conf_win_right_offset = (frame_width_aligned - frame_width);
@@ -791,36 +818,34 @@ void fill_sps_header(struct  SeqParamSet *sps, int id)
             sps->conf_win_bottom_offset = (frame_height_aligned - frame_height) >> 1;
             break;
         }
-    }
-    else
-    {
+    } else {
         sps->conformance_window_flag = 0;
     }
 
     sps->bit_depth_luma_minus8 = 0;
     sps->bit_depth_chroma_minus8 = 0;
-    sps->log2_max_pic_order_cnt_lsb_minus4 =MAX((ceil(log(ip_period - 1 + 4)/log(2.0))+3), 4) - 4;
+    sps->log2_max_pic_order_cnt_lsb_minus4 = MAX((ceil(log(ip_period - 1 + 4) / log(2.0)) + 3), 4) - 4;
     sps->sps_sub_layer_ordering_info_present_flag = 0;
-    for (i = 0; i < MAX_TEMPORAL_SUBLAYERS; i++)
-    {
+    for (i = 0; i < MAX_TEMPORAL_SUBLAYERS; i++) {
         sps->sps_max_dec_pic_buffering_minus1[i] = intra_period == 1 ? 1 : 6;
         sps->sps_max_num_reorder_pics[i] = ip_period != 0 ? ip_period - 1 : 0;
         sps->sps_max_latency_increase_plus1[i] = 0;
     }
-    sps->log2_min_luma_coding_block_size_minus3 = 0;
-    int log2_max_luma_coding_block_size = log2(LCU_SIZE);
+    sps->log2_min_luma_coding_block_size_minus3 = use_block_sizes ? block_sizes.log2_min_luma_coding_block_size_minus3 : 0;
+    int log2_max_luma_coding_block_size = use_block_sizes ? block_sizes.log2_max_coding_tree_block_size_minus3 + 3 : log2(LCU_SIZE);
     int log2_min_luma_coding_block_size = sps->log2_min_luma_coding_block_size_minus3 + 3;
     sps->log2_diff_max_min_luma_coding_block_size = log2_max_luma_coding_block_size -
-        log2_min_luma_coding_block_size;
-    sps->log2_min_luma_transform_block_size_minus2 = 0;
-    sps->log2_diff_max_min_luma_transform_block_size = 3;
-    sps->max_transform_hierarchy_depth_inter = 2;
-    sps->max_transform_hierarchy_depth_intra = 2;
-    sps->scaling_list_enabled_flag = 0;
-    //sps->sps_scaling_list_data_present_flag; // ignore since scaling_list_enabled_flag equal to 0
-    sps->amp_enabled_flag = 1;
-    sps->sample_adaptive_offset_enabled_flag = 0;
-    sps->pcm_enabled_flag = 0;
+            log2_min_luma_coding_block_size;
+    sps->log2_min_luma_transform_block_size_minus2 = use_block_sizes ? block_sizes.log2_min_luma_transform_block_size_minus2 : 0;
+    sps->log2_diff_max_min_luma_transform_block_size = use_block_sizes ? (block_sizes.log2_max_luma_transform_block_size_minus2 - 
+                                                                          sps->log2_min_luma_transform_block_size_minus2) : 3;
+    sps->max_transform_hierarchy_depth_inter = use_block_sizes ? block_sizes.max_max_transform_hierarchy_depth_inter : 2;
+    sps->max_transform_hierarchy_depth_intra = use_block_sizes ? block_sizes.max_max_transform_hierarchy_depth_intra : 2;
+    sps->scaling_list_enabled_flag = use_features ? features.scaling_lists : 0;
+    sps->sps_scaling_list_data_present_flag = 0;
+    sps->amp_enabled_flag = use_features ? features.amp : 1;
+    sps->sample_adaptive_offset_enabled_flag = use_features ? features.sao : 1;
+    sps->pcm_enabled_flag = use_features ? features.pcm : 0;
     /* ignore below parameters seting since pcm_enabled_flag equal to 0
     pcm_sample_bit_depth_luma_minus1;
     pcm_sample_bit_depth_chroma_minus1;
@@ -839,9 +864,9 @@ void fill_sps_header(struct  SeqParamSet *sps, int id)
     lt_ref_pic_poc_lsb_sps[kMaxLongTermRefPic];
     used_by_curr_pic_lt_sps_flag[kMaxLongTermRefPic];
     */
-    sps->sps_temporal_mvp_enabled_flag = 1;
-    sps->strong_intra_smoothing_enabled_flag = 0;
-
+    sps->sps_temporal_mvp_enabled_flag = use_features ? features.temporal_mvp : 1;
+    sps->strong_intra_smoothing_enabled_flag = use_features ? features.strong_intra_smoothing : 0;
+    
     sps->vui_parameters_present_flag = 0;
     sps->sps_extension_present_flag = 0;
     /* ignore below parameters seting since sps_extension_present_flag equal to 0
@@ -862,37 +887,37 @@ static void fill_pps_header(
 
     pps->pps_pic_parameter_set_id = pps_id;
     pps->pps_seq_parameter_set_id = sps_id;
-    pps->dependent_slice_segments_enabled_flag = 0;
+    pps->dependent_slice_segments_enabled_flag = use_features ? features.dependent_slices : 0;
     pps->output_flag_present_flag = 0;
     pps->num_extra_slice_header_bits = 0;
-    pps->sign_data_hiding_enabled_flag = 0;
+    pps->sign_data_hiding_enabled_flag = use_features ? features.sign_data_hiding : 0;
     pps->cabac_init_present_flag = 1;
 
     pps->num_ref_idx_l0_default_active_minus1 = 0;
     pps->num_ref_idx_l1_default_active_minus1 = 0;
 
     pps->init_qp_minus26 = initial_qp - 26;
-    pps->constrained_intra_pred_flag = 0;
-    pps->transform_skip_enabled_flag = 0;
-    pps->cu_qp_delta_enabled_flag =0;
+    pps->constrained_intra_pred_flag = use_features ? features.constrained_intra_pred : 0;
+    pps->transform_skip_enabled_flag = use_features ? features.transform_skip : 0;
+    pps->cu_qp_delta_enabled_flag = use_features ? features.cu_qp_delta : 1;
     if (pps->cu_qp_delta_enabled_flag)
-        pps->diff_cu_qp_delta_depth = 0;
+        pps->diff_cu_qp_delta_depth = 2;
     pps->pps_cb_qp_offset = 0;
     pps->pps_cr_qp_offset = 0;
     pps->pps_slice_chroma_qp_offsets_present_flag = 0;
-    pps->weighted_pred_flag = 0;
+    pps->weighted_pred_flag = use_features ? features.weighted_prediction : 0;
     pps->weighted_bipred_flag = 0;
-    pps->transquant_bypass_enabled_flag = 0;
+    pps->transquant_bypass_enabled_flag = use_features ? features.transquant_bypass : 0;
     pps->entropy_coding_sync_enabled_flag = 0;
     pps->tiles_enabled_flag = 0;
 
     pps->pps_loop_filter_across_slices_enabled_flag = 0;
     pps->deblocking_filter_control_present_flag = 1;
     pps->deblocking_filter_override_enabled_flag = 0,
-    pps->pps_deblocking_filter_disabled_flag = 0,
-    pps->pps_beta_offset_div2 = 2,
-    pps->pps_tc_offset_div2 = 0,
-    pps->pps_scaling_list_data_present_flag = 0;
+         pps->pps_deblocking_filter_disabled_flag = use_features ? features.deblocking_filter_disable : 0,
+              pps->pps_beta_offset_div2 = 2,
+                   pps->pps_tc_offset_div2 = 0,
+                        pps->pps_scaling_list_data_present_flag = 0;
     pps->lists_modification_present_flag = 0;
     pps->log2_parallel_merge_level_minus2 = 0;
     pps->slice_segment_header_extension_present_flag = 0;
@@ -912,11 +937,12 @@ static void fill_slice_header(
     slice->pic_order_cnt_lsb = calc_poc((current_frame_display - current_IDR_display) % MaxPicOrderCntLsb);
 
     //slice_segment_address (u(v))
-    slice->picture_height_in_ctus = (frame_height + LCU_SIZE -1)/LCU_SIZE;
-    slice->picture_width_in_ctus = (frame_width + LCU_SIZE -1)/LCU_SIZE;
+    int lcu_size = use_block_sizes ? (1 << (block_sizes.log2_max_coding_tree_block_size_minus3 + 3)) : LCU_SIZE;
+    slice->picture_height_in_ctus = (frame_height + lcu_size - 1) / lcu_size;
+    slice->picture_width_in_ctus = (frame_width + lcu_size - 1) / lcu_size;
     slice->slice_segment_address = 0;
     slice->first_slice_segment_in_pic_flag = ((slice->slice_segment_address == 0) ? 1 : 0);
-    slice->slice_type = current_frame_type == FRAME_P ? (p2b ? SLICE_B :SLICE_P):
+    slice->slice_type = current_frame_type == FRAME_P ? (p2b ? SLICE_B : SLICE_P) :
                         current_frame_type == FRAME_B ? SLICE_B : SLICE_I;
 
     slice->dependent_slice_segment_flag = 0;
@@ -927,22 +953,19 @@ static void fill_slice_header(
     slice->strp.num_positive_pics = 0;
     slice->slice_sao_luma_flag = 0;
     slice->slice_sao_chroma_flag = 0;
-    slice->slice_temporal_mvp_enabled_flag = 1;
+    slice->slice_temporal_mvp_enabled_flag = use_features ? features.temporal_mvp : 1;
 
     slice->num_ref_idx_l0_active_minus1 = pps->num_ref_idx_l0_default_active_minus1;
     slice->num_ref_idx_l1_active_minus1 = pps->num_ref_idx_l1_default_active_minus1;
 
     slice->num_poc_total_cur = 0;
     // for I slice
-    if (current_frame_type == FRAME_I || current_frame_type == FRAME_IDR)
-    {
+    if (current_frame_type == FRAME_I || current_frame_type == FRAME_IDR) {
         slice->ref_pic_list_modification_flag_l0 = 0;
         slice->list_entry_l0 = 0;
         slice->ref_pic_list_modification_flag_l1 = 0;
         slice->list_entry_l1 = 0;
-    }
-    else
-    {
+    } else {
         slice->ref_pic_list_modification_flag_l0 = 1;
         slice->num_poc_total_cur = 2;
     }
@@ -982,7 +1005,7 @@ static void protier_rbsp(bitstream *bs)
     put_ui(bs, protier_param.general_profile_idc, 5);
 
     for (i = 0; i < 32; i++)
-      put_ui(bs, protier_param.general_profile_compatibility_flag[i], 1);
+        put_ui(bs, protier_param.general_profile_compatibility_flag[i], 1);
 
     put_ui(bs, protier_param.general_progressive_source_flag, 1);
     put_ui(bs, protier_param.general_interlaced_source_flag, 1);
@@ -994,9 +1017,9 @@ static void protier_rbsp(bitstream *bs)
     put_ui(bs, protier_param.general_level_idc, 8);
 }
 void pack_short_term_ref_pic_setp(
-       bitstream *bs,
-       struct ShortTermRefPicParamSet* strp,
-       int first_strp)
+    bitstream *bs,
+    struct ShortTermRefPicParamSet* strp,
+    int first_strp)
 {
     uint32_t i = 0;
     if (!first_strp)
@@ -1006,13 +1029,11 @@ void pack_short_term_ref_pic_setp(
     put_ue(bs, strp->num_negative_pics);
     put_ue(bs, strp->num_positive_pics);
 
-    for (i = 0; i < strp->num_negative_pics; i++)
-    {
+    for (i = 0; i < strp->num_negative_pics; i++) {
         put_ue(bs, strp->delta_poc_s0_minus1[i]);
         put_ui(bs, strp->used_by_curr_pic_s0_flag[i], 1);
     }
-    for (i = 0; i < strp->num_positive_pics; i++)
-    {
+    for (i = 0; i < strp->num_positive_pics; i++) {
         put_ue(bs, strp->delta_poc_s1_minus1[i]);
         put_ui(bs, strp->used_by_curr_pic_s1_flag[i], 1);
     }
@@ -1031,8 +1052,7 @@ static void vps_rbsp(bitstream *bs)
 
     put_ui(bs, vps.vps_sub_layer_ordering_info_present_flag, 1);
 
-    for (i = (vps.vps_sub_layer_ordering_info_present_flag ? 0 : vps.vps_max_sub_layers_minus1); i <= vps.vps_max_sub_layers_minus1; i++)
-    {
+    for (i = (vps.vps_sub_layer_ordering_info_present_flag ? 0 : vps.vps_max_sub_layers_minus1); i <= vps.vps_max_sub_layers_minus1; i++) {
         // NOTE: In teddi and mv_encoder, the setting is max_dec_pic_buffering.
         // here just follow the spec 7.3.2.1
         put_ue(bs, vps.vps_max_dec_pic_buffering_minus1[i]);
@@ -1045,21 +1065,17 @@ static void vps_rbsp(bitstream *bs)
 
     put_ui(bs, vps.vps_timing_info_present_flag, 1);
 
-    if (vps.vps_timing_info_present_flag)
-    {
+    if (vps.vps_timing_info_present_flag) {
         put_ue(bs, vps.vps_num_units_in_tick);
         put_ue(bs, vps.vps_time_scale);
         put_ue(bs, vps.vps_poc_proportional_to_timing_flag);
-        if (vps.vps_poc_proportional_to_timing_flag)
-        {
+        if (vps.vps_poc_proportional_to_timing_flag) {
             put_ue(bs, vps.vps_num_ticks_poc_diff_one_minus1);
         }
         put_ue(bs, vps.vps_num_hrd_parameters);
-        for (i = 0; i < vps.vps_num_hrd_parameters; i++)
-        {
+        for (i = 0; i < vps.vps_num_hrd_parameters; i++) {
             put_ue(bs, vps.hrd_layer_set_idx[i]);
-            if (i > 0)
-            {
+            if (i > 0) {
                 put_ui(bs, vps.cprms_present_flag[i], 1);
             }
         }
@@ -1081,8 +1097,7 @@ static void sps_rbsp(bitstream *bs)
     put_ue(bs, sps.sps_seq_parameter_set_id);
     put_ue(bs, sps.chroma_format_idc);
 
-    if (sps.chroma_format_idc == 3)
-    {
+    if (sps.chroma_format_idc == 3) {
         put_ui(bs, sps.separate_colour_plane_flag, 1);
 
     }
@@ -1091,8 +1106,7 @@ static void sps_rbsp(bitstream *bs)
 
     put_ui(bs, sps.conformance_window_flag, 1);
 
-    if (sps.conformance_window_flag)
-    {
+    if (sps.conformance_window_flag) {
         put_ue(bs, sps.conf_win_left_offset);
         put_ue(bs, sps.conf_win_right_offset);
         put_ue(bs, sps.conf_win_top_offset);
@@ -1103,8 +1117,7 @@ static void sps_rbsp(bitstream *bs)
     put_ue(bs, sps.log2_max_pic_order_cnt_lsb_minus4);
     put_ui(bs, sps.sps_sub_layer_ordering_info_present_flag, 1);
 
-    for (i = (sps.sps_sub_layer_ordering_info_present_flag ? 0 : sps.sps_max_sub_layers_minus1); i <= sps.sps_max_sub_layers_minus1; i++)
-    {
+    for (i = (sps.sps_sub_layer_ordering_info_present_flag ? 0 : sps.sps_max_sub_layers_minus1); i <= sps.sps_max_sub_layers_minus1; i++) {
         // NOTE: In teddi and mv_encoder, the setting is max_dec_pic_buffering.
         // here just follow the spec 7.3.2.2
         put_ue(bs, sps.sps_max_dec_pic_buffering_minus1[i]);
@@ -1121,11 +1134,9 @@ static void sps_rbsp(bitstream *bs)
 
     // scaling_list_enabled_flag is set as 0 in fill_sps_header() for now
     put_ui(bs, sps.scaling_list_enabled_flag, 1);
-    if (sps.scaling_list_enabled_flag)
-    {
+    if (sps.scaling_list_enabled_flag) {
         put_ui(bs, sps.sps_scaling_list_data_present_flag, 1);
-        if (sps.sps_scaling_list_data_present_flag)
-        {
+        if (sps.sps_scaling_list_data_present_flag) {
             //scaling_list_data();
         }
     }
@@ -1135,8 +1146,7 @@ static void sps_rbsp(bitstream *bs)
 
     // pcm_enabled_flag is set as 0 in fill_sps_header() for now
     put_ui(bs, sps.pcm_enabled_flag, 1);
-    if (sps.pcm_enabled_flag)
-    {
+    if (sps.pcm_enabled_flag) {
         put_ui(bs, sps.pcm_sample_bit_depth_luma_minus1, 4);
         put_ui(bs, sps.pcm_sample_bit_depth_chroma_minus1, 4);
         put_ue(bs, sps.log2_min_pcm_luma_coding_block_size_minus3);
@@ -1145,18 +1155,15 @@ static void sps_rbsp(bitstream *bs)
     }
 
     put_ue(bs, sps.num_short_term_ref_pic_sets);
-    for (i = 0; i < sps.num_short_term_ref_pic_sets; i++)
-    {
+    for (i = 0; i < sps.num_short_term_ref_pic_sets; i++) {
         pack_short_term_ref_pic_setp(bs, &sps.strp[i], i == 0);
     }
 
     // long_term_ref_pics_present_flag is set as 0 in fill_sps_header() for now
     put_ui(bs, sps.long_term_ref_pics_present_flag, 1);
-    if (sps.long_term_ref_pics_present_flag)
-    {
+    if (sps.long_term_ref_pics_present_flag) {
         put_ue(bs, sps.num_long_term_ref_pics_sps);
-        for (i = 0; i < sps.num_long_term_ref_pics_sps; i++)
-        {
+        for (i = 0; i < sps.num_long_term_ref_pics_sps; i++) {
             put_ue(bs, sps.lt_ref_pic_poc_lsb_sps[i]);
             put_ui(bs, sps.used_by_curr_pic_lt_sps_flag[i], 1);
         }
@@ -1190,8 +1197,7 @@ static void pps_rbsp(bitstream *bs)
     put_ui(bs, pps.transform_skip_enabled_flag, 1);
 
     put_ui(bs, pps.cu_qp_delta_enabled_flag, 1);
-    if (pps.cu_qp_delta_enabled_flag)
-    {
+    if (pps.cu_qp_delta_enabled_flag) {
         put_ue(bs, pps.diff_cu_qp_delta_depth);
     }
 
@@ -1205,20 +1211,16 @@ static void pps_rbsp(bitstream *bs)
     put_ui(bs, pps.tiles_enabled_flag, 1);
     put_ui(bs, pps.entropy_coding_sync_enabled_flag, 1);
 
-    if (pps.tiles_enabled_flag)
-    {
+    if (pps.tiles_enabled_flag) {
         put_ue(bs, pps.num_tile_columns_minus1);
         put_ue(bs, pps.num_tile_rows_minus1);
         put_ui(bs, pps.uniform_spacing_flag, 1);
-        if (!pps.uniform_spacing_flag)
-        {
-            for (i = 0; i < pps.num_tile_columns_minus1; i++)
-            {
+        if (!pps.uniform_spacing_flag) {
+            for (i = 0; i < pps.num_tile_columns_minus1; i++) {
                 put_ue(bs, pps.column_width_minus1[i]);
             }
 
-            for (i = 0; i < pps.num_tile_rows_minus1; i++)
-            {
+            for (i = 0; i < pps.num_tile_rows_minus1; i++) {
                 put_ue(bs, pps.row_height_minus1[i]);
             }
 
@@ -1228,12 +1230,10 @@ static void pps_rbsp(bitstream *bs)
 
     put_ui(bs, pps.pps_loop_filter_across_slices_enabled_flag, 1);
     put_ui(bs, pps.deblocking_filter_control_present_flag, 1);
-    if (pps.deblocking_filter_control_present_flag)
-    {
+    if (pps.deblocking_filter_control_present_flag) {
         put_ui(bs, pps.deblocking_filter_override_enabled_flag, 1);
         put_ui(bs, pps.pps_deblocking_filter_disabled_flag, 1);
-        if (!pps.pps_deblocking_filter_disabled_flag)
-        {
+        if (!pps.pps_deblocking_filter_disabled_flag) {
             put_se(bs, pps.pps_beta_offset_div2);
             put_se(bs, pps.pps_tc_offset_div2);
         }
@@ -1241,8 +1241,7 @@ static void pps_rbsp(bitstream *bs)
 
     // pps_scaling_list_data_present_flag is set as 0 in fill_pps_header() for now
     put_ui(bs, pps.pps_scaling_list_data_present_flag, 1);
-    if (pps.pps_scaling_list_data_present_flag)
-    {
+    if (pps.pps_scaling_list_data_present_flag) {
         //scaling_list_data();
     }
 
@@ -1251,8 +1250,7 @@ static void pps_rbsp(bitstream *bs)
     put_ui(bs, pps.slice_segment_header_extension_present_flag, 1);
 
     put_ui(bs, pps.pps_extension_present_flag, 1);
-    if (pps.pps_extension_present_flag)
-    {
+    if (pps.pps_extension_present_flag) {
         put_ui(bs, pps.pps_range_extension_flag, 1);
         put_ui(bs, pps.pps_multilayer_extension_flag, 1);
         put_ui(bs, pps.pps_3d_extension_flag, 1);
@@ -1260,19 +1258,16 @@ static void pps_rbsp(bitstream *bs)
 
     }
 
-    if (pps.pps_range_extension_flag)
-    {
+    if (pps.pps_range_extension_flag) {
         if (pps.transform_skip_enabled_flag)
             put_ue(bs, pps.log2_max_transform_skip_block_size_minus2);
         put_ui(bs, pps.cross_component_prediction_enabled_flag, 1);
         put_ui(bs, pps.chroma_qp_offset_list_enabled_flag, 1);
 
-        if (pps.chroma_qp_offset_list_enabled_flag)
-        {
+        if (pps.chroma_qp_offset_list_enabled_flag) {
             put_ue(bs, pps.diff_cu_chroma_qp_offset_depth);
             put_ue(bs, pps.chroma_qp_offset_list_len_minus1);
-            for (i = 0; i <= pps.chroma_qp_offset_list_len_minus1; i++)
-            {
+            for (i = 0; i <= pps.chroma_qp_offset_list_len_minus1; i++) {
                 put_ue(bs, pps.cb_qp_offset_list[i]);
                 put_ue(bs, pps.cr_qp_offset_list[i]);
             }
@@ -1284,16 +1279,14 @@ static void pps_rbsp(bitstream *bs)
 
 }
 static void sliceHeader_rbsp(
-       bitstream *bs,
-       struct SliceHeader *slice_header,
-       struct SeqParamSet *sps,
-       struct PicParamSet *pps,
-       int isidr)
+    bitstream *bs,
+    struct SliceHeader *slice_header,
+    struct SeqParamSet *sps,
+    struct PicParamSet *pps,
+    int isidr)
 {
     uint8_t nal_unit_type = NALU_TRAIL_R;
     int gop_ref_distance = ip_period;
-    int incomplete_mini_gop = 0;
-    int p_slice_flag = 1;
     int i = 0;
 
     put_ui(bs, slice_header->first_slice_segment_in_pic_flag, 1);
@@ -1301,46 +1294,38 @@ static void sliceHeader_rbsp(
         nal_unit_type = NALU_IDR_W_DLP;
 
     if (nal_unit_type >= 16 && nal_unit_type <= 23)
-    put_ui(bs, slice_header->no_output_of_prior_pics_flag, 1);
+        put_ui(bs, slice_header->no_output_of_prior_pics_flag, 1);
 
     put_ue(bs, slice_header->slice_pic_parameter_set_id);
 
-    if (!slice_header->first_slice_segment_in_pic_flag)
-    {
-        if (slice_header->dependent_slice_segment_flag)
-        {
+    if (!slice_header->first_slice_segment_in_pic_flag) {
+        if (slice_header->dependent_slice_segment_flag) {
             put_ui(bs, slice_header->dependent_slice_segment_flag, 1);
         }
 
         put_ui(bs, slice_header->slice_segment_address,
-             (uint8_t)(ceil(log(slice_header->picture_height_in_ctus * slice_header->picture_width_in_ctus) / log(2.0))));
+               (uint8_t)(ceil(log(slice_header->picture_height_in_ctus * slice_header->picture_width_in_ctus) / log(2.0))));
     }
-    if (!slice_header->dependent_slice_segment_flag)
-    {
-        for (i = 0; i < pps->num_extra_slice_header_bits; i++)
-        {
+    if (!slice_header->dependent_slice_segment_flag) {
+        for (i = 0; i < pps->num_extra_slice_header_bits; i++) {
             put_ui(bs, slice_header->slice_reserved_undetermined_flag[i], 1);
         }
         put_ue(bs, slice_header->slice_type);
-        if (pps->output_flag_present_flag)
-        {
+        if (pps->output_flag_present_flag) {
             put_ui(bs, slice_header->pic_output_flag, 1);
         }
-        if (sps->separate_colour_plane_flag == 1)
-        {
+        if (sps->separate_colour_plane_flag == 1) {
             put_ui(bs, slice_header->colour_plane_id, 2);
         }
 
-        if (!(nal_unit_type == NALU_IDR_W_DLP || nal_unit_type == NALU_IDR_N_LP))
-        {
+        if (!(nal_unit_type == NALU_IDR_W_DLP || nal_unit_type == NALU_IDR_N_LP)) {
             put_ui(bs, slice_header->pic_order_cnt_lsb, (sps->log2_max_pic_order_cnt_lsb_minus4 + 4));
             put_ui(bs, slice_header->short_term_ref_pic_set_sps_flag, 1);
 
-            if (!slice_header->short_term_ref_pic_set_sps_flag)
-            {
+            if (!slice_header->short_term_ref_pic_set_sps_flag) {
                 // refer to Teddi
                 if (sps->num_short_term_ref_pic_sets > 0)
-                put_ui(bs, 0, 1); // inter_ref_pic_set_prediction_flag, always 0 for now
+                    put_ui(bs, 0, 1); // inter_ref_pic_set_prediction_flag, always 0 for now
 
                 put_ue(bs, slice_header->strp.num_negative_pics);
                 put_ue(bs, slice_header->strp.num_positive_pics);
@@ -1352,105 +1337,45 @@ static void sliceHeader_rbsp(
                 int prev = 0;
                 int frame_cnt_in_gop = slice_header->pic_order_cnt_lsb / 2;
                 // this is the first big 'for' block
-                for (i = 0; i < slice_header->strp.num_negative_pics; i++)
-                {
+                for (i = 0; i < slice_header->strp.num_negative_pics; i++) {
                     // Low Delay B case
-                    if (1 == gop_ref_distance)
-                    {
+                    if (1 == gop_ref_distance) {
                         put_ue(bs, 0 /*delta_poc_s0_minus1*/);
-                    }
-                    else
-                    {
-                        if(incomplete_mini_gop)
-                        {
-                            if (frame_cnt_in_gop % gop_ref_distance > i)
-                            {
-                                put_ue(bs, 0 /*delta_poc_s0_minus1*/);
-                            }
-                            else
-                            {
-                                int DeltaPoc = -(int)(gop_ref_distance);
-                                put_ue(bs, prev - DeltaPoc - 1 /*delta_poc_s0_minus1*/);
-                            }
-                        }
-                        else
-                        {
-                            // For Non-BPyramid GOP i.e B0 type
-                            if (num_active_ref_p > 1)
-                            {
-                                // MultiRef Case
-                                if (p_slice_flag)
-                                {
-                                    // DeltaPOC Equals NumB
-                                    int DeltaPoc = -(int)(gop_ref_distance);
-                                    put_ue(bs, prev - DeltaPoc - 1 /*delta_poc_s0_minus1*/);
-                                }
-                                else
-                                {
-                                    // for normal B
-                                    if (frame_cnt_in_gop < gop_ref_distance)
-                                    {
-                                        if (0 == i)
-                                        {
-                                            int DeltaPoc = -(int)(frame_cnt_in_gop);
-                                            put_ue(bs, prev - DeltaPoc - 1 /*delta_poc_s0_minus1*/);
-                                        }
-                                    }
-                                    else if (frame_cnt_in_gop > gop_ref_distance)
-                                    {
-                                        if (0 == i)
-                                        {
-                                            //Need % to wraparound the delta poc, to avoid corruption caused on POC=5 with GOP (29,2) and 4 refs
-                                            int DeltaPoc = -(int)((frame_cnt_in_gop - gop_ref_distance) % gop_ref_distance);
-                                            put_ue(bs, prev - DeltaPoc - 1 /*delta_poc_s0_minus1*/);
-                                        }
-                                        else if (1 <= i)
-                                        {
-                                            int DeltaPoc = -(int)(gop_ref_distance);
-                                            put_ue(bs, prev - DeltaPoc - 1 /*delta_poc_s0_minus1*/);
-                                        }
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                //  the big 'if' wraps here is -
-                                //     if (!slice_header->short_term_ref_pic_set_sps_flag)
-                                // From the Teddi logic, the short_term_ref_pic_set_sps_flag only can be '0'
-                                // either for B-Prymid or first several frames in a GOP in multi-ref cases
-                                // when there are not enough backward refs.
-                                // So though there are really some codes under this 'else'in Teddi, don't
-                                // want to introduce them in MEA to avoid confusion, and put an assert
-                                // here to guard that there is new case we need handle in the future.
-                                assert(0);
-
-                            }
+                    } else {
+                        // For Non-BPyramid GOP i.e B0 type
+                        if (num_active_ref_p > 1) {
+                            // DeltaPOC Equals NumB
+                            int DeltaPoc = -(int)(gop_ref_distance);
+                            put_ue(bs, prev - DeltaPoc - 1 /*delta_poc_s0_minus1*/);
+                        } else {
+                            //  the big 'if' wraps here is -
+                            //     if (!slice_header->short_term_ref_pic_set_sps_flag)
+                            // From the Teddi logic, the short_term_ref_pic_set_sps_flag only can be '0'
+                            // either for B-Prymid or first several frames in a GOP in multi-ref cases
+                            // when there are not enough backward refs.
+                            // So though there are really some codes under this 'else'in Teddi, don't
+                            // want to introduce them in MEA to avoid confusion, and put an assert
+                            // here to guard that there is new case we need handle in the future.
+                            assert(0);
                         }
                     }
-                    put_ui(bs, 1 /*used_by_curr_pic_s0_flag*/,1);
+                    put_ui(bs, 1 /*used_by_curr_pic_s0_flag*/, 1);
                 }
 
                 prev = 0;
                 // this is the second big 'for' block
-                for (i = 0; i < slice_header->strp.num_positive_pics; i++)
-                {
+                for (i = 0; i < slice_header->strp.num_positive_pics; i++) {
                     // Non-BPyramid GOP
-                    if (num_active_ref_p > 1)
-                    {
+                    if (num_active_ref_p > 1) {
                         // MultiRef Case
-                        if (frame_cnt_in_gop < gop_ref_distance)
-                        {
+                        if (frame_cnt_in_gop < gop_ref_distance) {
                             int DeltaPoc = (int)(gop_ref_distance - frame_cnt_in_gop);
                             put_ue(bs, DeltaPoc - prev - 1 /*delta_poc_s1_minus1*/);
-                        }
-                        else if (frame_cnt_in_gop > gop_ref_distance)
-                        {
+                        } else if (frame_cnt_in_gop > gop_ref_distance) {
                             int DeltaPoc = (int)(gop_ref_distance * slice_header->strp.num_negative_pics - frame_cnt_in_gop);
                             put_ue(bs, DeltaPoc - prev - 1 /*delta_poc_s1_minus1*/);
                         }
-                    }
-                    else
-                    {
+                    } else {
                         //  the big 'if' wraps here is -
                         //     if (!slice_header->short_term_ref_pic_set_sps_flag)
                         // From the Teddi logic, the short_term_ref_pic_set_sps_flag only can be '0'
@@ -1461,117 +1386,98 @@ static void sliceHeader_rbsp(
                         // here to guard that there is new case we need handle in the future.
                         assert(0);
                     }
-                    put_ui(bs, 1 /*used_by_curr_pic_s1_flag*/,1);
+                    put_ui(bs, 1 /*used_by_curr_pic_s1_flag*/, 1);
                 }
-            }
-            else if (sps->num_short_term_ref_pic_sets > 1)
+            } else if (sps->num_short_term_ref_pic_sets > 1)
                 put_ui(bs, slice_header->short_term_ref_pic_set_idx,
-                       (uint8_t)(ceil(log(sps->num_short_term_ref_pic_sets)/log(2.0))));
+                       (uint8_t)(ceil(log(sps->num_short_term_ref_pic_sets) / log(2.0))));
 
-            if (sps->long_term_ref_pics_present_flag)
-            {
+            if (sps->long_term_ref_pics_present_flag) {
                 if (sps->num_long_term_ref_pics_sps > 0)
                     put_ue(bs, slice_header->num_long_term_sps);
 
                 put_ue(bs, slice_header->num_long_term_pics);
             }
 
-            if (slice_header->slice_temporal_mvp_enabled_flag)
-                    put_ui(bs, slice_header->slice_temporal_mvp_enabled_flag, 1);
+            if (sps->sps_temporal_mvp_enabled_flag)
+                put_ui(bs, slice_header->slice_temporal_mvp_enabled_flag, 1);
 
         }
 
-        if (sps->sample_adaptive_offset_enabled_flag)
-        {
-                put_ui(bs, slice_header->slice_sao_luma_flag, 1);
-                put_ui(bs, slice_header->slice_sao_chroma_flag, 1);
+        if (sps->sample_adaptive_offset_enabled_flag) {
+            put_ui(bs, slice_header->slice_sao_luma_flag, 1);
+            put_ui(bs, slice_header->slice_sao_chroma_flag, 1);
         }
 
-        if (slice_header->slice_type != SLICE_I)
-        {
+        if (slice_header->slice_type != SLICE_I) {
             put_ui(bs, slice_header->num_ref_idx_active_override_flag, 1);
 
-            if (slice_header->num_ref_idx_active_override_flag)
-            {
+            if (slice_header->num_ref_idx_active_override_flag) {
                 put_ue(bs, slice_header->num_ref_idx_l0_active_minus1);
                 if (slice_header->slice_type == SLICE_B)
                     put_ue(bs, slice_header->num_ref_idx_l1_active_minus1);
             }
 
-            if (pps->lists_modification_present_flag &&  slice_header->num_poc_total_cur > 1)
-            {
-              /* ref_pic_list_modification */
-              put_ui(bs, slice_header->ref_pic_list_modification_flag_l0, 1);
+            if (pps->lists_modification_present_flag &&  slice_header->num_poc_total_cur > 1) {
+                /* ref_pic_list_modification */
+                put_ui(bs, slice_header->ref_pic_list_modification_flag_l0, 1);
 
-              if (slice_header->ref_pic_list_modification_flag_l0)
-              {
-              for (i = 0; i <= slice_header->num_ref_idx_l0_active_minus1; i++)
-                {
-                  put_ui(bs, slice_header->list_entry_l0[i],
-                         (uint8_t)(ceil(log(slice_header->num_poc_total_cur) / log(2.0))));
+                if (slice_header->ref_pic_list_modification_flag_l0) {
+                    for (i = 0; i <= slice_header->num_ref_idx_l0_active_minus1; i++) {
+                        put_ui(bs, slice_header->list_entry_l0[i],
+                               (uint8_t)(ceil(log(slice_header->num_poc_total_cur) / log(2.0))));
+                    }
+                }
+
+                put_ui(bs, slice_header->ref_pic_list_modification_flag_l1, 1);
+
+                if (slice_header->ref_pic_list_modification_flag_l1) {
+                    for (i = 0; i <= slice_header->num_ref_idx_l1_active_minus1; i++) {
+                        put_ui(bs, slice_header->list_entry_l1[i],
+                               (uint8_t)(ceil(log(slice_header->num_poc_total_cur) / log(2.0))));
+                    }
                 }
             }
 
-            put_ui(bs, slice_header->ref_pic_list_modification_flag_l1, 1);
+            if (slice_header->slice_type == SLICE_B) {
+                put_ui(bs, slice_header->mvd_l1_zero_flag, 1);
+            }
 
-            if (slice_header->ref_pic_list_modification_flag_l1)
-            {
-                for (i = 0; i <= slice_header->num_ref_idx_l1_active_minus1; i++)
-                {
-                    put_ui(bs, slice_header->list_entry_l1[i],
-                        (uint8_t)(ceil(log(slice_header->num_poc_total_cur) / log(2.0))));
+            if (pps->cabac_init_present_flag) {
+                put_ui(bs, slice_header->cabac_init_present_flag, 1);
+            }
+
+            if (slice_header->slice_temporal_mvp_enabled_flag) {
+                int collocated_from_l0_flag = 1;
+
+                if (slice_header->slice_type == SLICE_B) {
+                    collocated_from_l0_flag = slice_header->collocated_from_l0_flag;
+                    put_ui(bs, slice_header->collocated_from_l0_flag, 1);
+                }
+
+                if (((collocated_from_l0_flag && (slice_header->num_ref_idx_l0_active_minus1 > 0)) ||
+                     (!collocated_from_l0_flag && (slice_header->num_ref_idx_l1_active_minus1 > 0)))) {
+                    put_ue(bs, slice_header->collocated_ref_idx);
                 }
             }
-        }
-
-        if (slice_header->slice_type == SLICE_B)
-        {
-            put_ui(bs, slice_header->mvd_l1_zero_flag, 1);
-        }
-
-        if (pps->cabac_init_present_flag)
-        {
-            put_ui(bs, slice_header->cabac_init_present_flag, 1);
-        }
-
-        if (slice_header->slice_temporal_mvp_enabled_flag)
-        {
-            int collocated_from_l0_flag = 1;
-
-            if (slice_header->slice_type == SLICE_B)
-            {
-                collocated_from_l0_flag = slice_header->collocated_from_l0_flag;
-                put_ui(bs, slice_header->collocated_from_l0_flag, 1);
-            }
-
-            if (((collocated_from_l0_flag && (slice_header->num_ref_idx_l0_active_minus1 > 0)) ||
-                (!collocated_from_l0_flag && (slice_header->num_ref_idx_l1_active_minus1 > 0))))
-            {
-                put_ue(bs, slice_header->collocated_ref_idx);
-            }
-        }
 
             put_ue(bs, slice_header->five_minus_max_num_merge_cand);
         }
 
         put_se(bs, slice_header->slice_qp_delta);
 
-        if (pps->chroma_qp_offset_list_enabled_flag)
-        {
+        if (pps->chroma_qp_offset_list_enabled_flag) {
             put_se(bs, slice_header->slice_qp_delta_cb);
             put_se(bs, slice_header->slice_qp_delta_cr);
         }
 
-        if (pps->deblocking_filter_override_enabled_flag)
-        {
+        if (pps->deblocking_filter_override_enabled_flag) {
             put_ui(bs, slice_header->deblocking_filter_override_flag, 1);
         }
-        if (slice_header->deblocking_filter_override_flag)
-        {
+        if (slice_header->deblocking_filter_override_flag) {
             put_ui(bs, slice_header->disable_deblocking_filter_flag, 1);
 
-            if (!slice_header->disable_deblocking_filter_flag)
-            {
+            if (!slice_header->disable_deblocking_filter_flag) {
                 put_se(bs, slice_header->beta_offset_div2);
                 put_se(bs, slice_header->tc_offset_div2);
             }
@@ -1579,34 +1485,24 @@ static void sliceHeader_rbsp(
 
         if (pps->pps_loop_filter_across_slices_enabled_flag &&
             (slice_header->slice_sao_luma_flag || slice_header->slice_sao_chroma_flag ||
-            !slice_header->disable_deblocking_filter_flag))
-        {
-                put_ui(bs, slice_header->slice_loop_filter_across_slices_enabled_flag, 1);
+             !slice_header->disable_deblocking_filter_flag)) {
+            put_ui(bs, slice_header->slice_loop_filter_across_slices_enabled_flag, 1);
         }
 
     }
 
-    if ((pps->tiles_enabled_flag) || (pps->entropy_coding_sync_enabled_flag))
-    {
+    if ((pps->tiles_enabled_flag) || (pps->entropy_coding_sync_enabled_flag)) {
         put_ue(bs, slice_header->num_entry_point_offsets);
 
-        if (slice_header->num_entry_point_offsets > 0)
-        {
+        if (slice_header->num_entry_point_offsets > 0) {
             put_ue(bs, slice_header->offset_len_minus1);
         }
     }
 
-    if (pps->slice_segment_header_extension_present_flag)
-    {
+    if (pps->slice_segment_header_extension_present_flag) {
         int slice_header_extension_length = 0;
 
         put_ue(bs, slice_header_extension_length);
-
-        for (i = 0; i < slice_header_extension_length; i++)
-        {
-             int slice_header_extension_data_byte = 0;
-             put_ui(bs, slice_header_extension_data_byte, 8);
-        }
     }
 }
 
@@ -1666,7 +1562,7 @@ static int build_packed_slice_buffer(unsigned char **header_buffer)
     bitstream_start(&bs);
     nal_start_code_prefix(&bs, NALU_TRAIL_R);
     nal_header(&bs, naluType);
-    sliceHeader_rbsp(&bs,&ssh, &sps, &pps, 0);
+    sliceHeader_rbsp(&bs, &ssh, &sps, &pps, 0);
     rbsp_trailing_bits(&bs);
     bitstream_end(&bs);
 
@@ -1683,7 +1579,7 @@ static unsigned int GetTickCount()
     struct timeval tv;
     if (gettimeofday(&tv, NULL))
         return 0;
-    return tv.tv_usec/1000+tv.tv_sec*1000;
+    return tv.tv_usec / 1000 + tv.tv_sec * 1000;
 }
 
 /*
@@ -1720,8 +1616,8 @@ static unsigned int GetTickCount()
  * frame_type: frame type
  */
 void encoding2display_order(
-    unsigned long long encoding_order,int intra_period,
-    int intra_idr_period,int ip_period,
+    unsigned long long encoding_order, int intra_period,
+    int intra_idr_period, int ip_period,
     unsigned long long *displaying_order,
     int *frame_type)
 {
@@ -1730,9 +1626,9 @@ void encoding2display_order(
     if (intra_period == 1) { /* all are I/IDR frames */
         *displaying_order = encoding_order;
         if (intra_idr_period == 0)
-            *frame_type = (encoding_order == 0)?FRAME_IDR:FRAME_I;
+            *frame_type = (encoding_order == 0) ? FRAME_IDR : FRAME_I;
         else
-            *frame_type = (encoding_order % intra_idr_period == 0)?FRAME_IDR:FRAME_I;
+            *frame_type = (encoding_order % intra_idr_period == 0) ? FRAME_IDR : FRAME_I;
         return;
     }
 
@@ -1743,8 +1639,8 @@ void encoding2display_order(
      * IDR PPPPP IPPPPP
      * IDR (PBB)(PBB)(IBB)(PBB)
      */
-    encoding_order_gop = (intra_idr_period == 0)? encoding_order:
-        (encoding_order % (intra_idr_period + ((ip_period == 1)?0:1)));
+    encoding_order_gop = (intra_idr_period == 0) ? encoding_order :
+                         (encoding_order % (intra_idr_period + ((ip_period == 1) ? 0 : 1)));
 
     if (encoding_order_gop == 0) { /* the first frame */
         *frame_type = FRAME_IDR;
@@ -1754,9 +1650,9 @@ void encoding2display_order(
         *displaying_order = encoding_order - 1;
     } else if ((intra_period != 0) && /* have I frames */
                (encoding_order_gop >= 2) &&
-               ((ip_period == 1 && encoding_order_gop % (intra_period-1) == 0) || /* for IDR PPPPP IPPPP */
+               ((ip_period == 1 && encoding_order_gop % (intra_period - 1) == 0) || /* for IDR PPPPP IPPPP */
                 /* for IDR (PBB)(PBB)(IBB) */
-                (ip_period >= 2 && ((encoding_order_gop - 1) / ip_period % ((intra_period-1) / ip_period)) == 0))) {
+                (ip_period >= 2 && ((encoding_order_gop - 1) / ip_period % ((intra_period - 1) / ip_period)) == 0))) {
         *frame_type = FRAME_I;
         *displaying_order = encoding_order + ip_period - 1;
     } else {
@@ -1860,7 +1756,7 @@ static int print_help(void)
     printf("   --intra_period <number>\n");
     printf("   --idr_period <number>\n");
     printf("   --ip_period <number>\n");
-    printf("   --bitrate <bitrate>\n");
+    printf("   --bitrate <bitrate> Kbits per second\n");
     printf("   --initialqp <number>\n");
     printf("   --minqp <number>\n");
     printf("   --rcmode <NONE|CBR|VBR|VCM|CQP|VBR_CONTRAINED>\n");
@@ -1871,6 +1767,7 @@ static int print_help(void)
     printf("   --enablePSNR calculate PSNR of recyuv vs. srcyuv\n");
     printf("   --profile 1: main 2 : main10\n");
     printf("   --p2b 1: enable 0 : disalbe(defalut)\n");
+    printf("   --lowpower 1: enable 0 : disalbe(defalut)\n");
     return 0;
 }
 
@@ -1896,10 +1793,12 @@ static int process_cmdline(int argc, char *argv[])
         {"framecount", required_argument, NULL, 16 },
         {"profile", required_argument, NULL, 17 },
         {"p2b", required_argument, NULL, 18 },
-        {NULL, no_argument, NULL, 0 }};
+        {"lowpower", required_argument, NULL, 19 },
+        {NULL, no_argument, NULL, 0 }
+    };
     int long_index;
 
-    while ((c =getopt_long_only(argc,argv,"w:h:n:f:o:?",long_opts,&long_index)) != EOF) {
+    while ((c = getopt_long_only(argc, argv, "w:h:n:f:o:?", long_opts, &long_index)) != EOF) {
         switch (c) {
         case 'w':
             frame_width = atoi(optarg);
@@ -1915,13 +1814,15 @@ static int process_cmdline(int argc, char *argv[])
             frame_rate = atoi(optarg);
             break;
         case 'o':
+            if (coded_fn)
+                free(coded_fn);
             coded_fn = strdup(optarg);
             break;
         case 0:
             print_help();
             exit(0);
         case 1:
-            frame_bitrate = atoi(optarg);
+            frame_bitrate = atoi(optarg)*1000;
             break;
         case 2:
             minimal_qp = atoi(optarg);
@@ -1946,9 +1847,13 @@ static int process_cmdline(int argc, char *argv[])
             }
             break;
         case 9:
+            if (srcyuv_fn)
+                free(srcyuv_fn);
             srcyuv_fn = strdup(optarg);
             break;
         case 10:
+            if (recyuv_fn)
+                free(recyuv_fn);
             recyuv_fn = strdup(optarg);
             break;
         case 11:
@@ -1971,21 +1876,20 @@ static int process_cmdline(int argc, char *argv[])
             misc_priv_value = strtol(optarg, NULL, 0);
             break;
         case 17:
-            if (strncmp(optarg, "1", 1) == 0)
-            {
+            if (strncmp(optarg, "1", 1) == 0) {
                 real_hevc_profile = 1;
                 hevc_profile = VAProfileHEVCMain;
-            }
-            else if (strncmp(optarg, "2", 1) == 0)
-            {
+            } else if (strncmp(optarg, "2", 1) == 0) {
                 real_hevc_profile = 2;
                 hevc_profile = VAProfileHEVCMain10;
-            }
-            else
+            } else
                 hevc_profile = 0;
             break;
-         case 18:
-                p2b = atoi(optarg);
+        case 18:
+            p2b = atoi(optarg);
+            break;
+        case 19:
+            lowpower = atoi(optarg);
             break;
 
         case ':':
@@ -2008,22 +1912,23 @@ static int process_cmdline(int argc, char *argv[])
         exit(0);
     }
     if (ip_period > 1) {
-        frame_count -= (frame_count -1)%ip_period;
+        frame_count -= (frame_count - 1) % ip_period;
     }
 
     if (frame_bitrate == 0)
-        frame_bitrate = frame_width * frame_height * 12 * frame_rate / 50;
+        frame_bitrate = (long long int) frame_width * frame_height * 12 * frame_rate / 50;
 
     /* open source file */
     if (srcyuv_fn) {
-        srcyuv_fp = fopen(srcyuv_fn,"r");
+        srcyuv_fp = fopen(srcyuv_fn, "r");
 
         if (srcyuv_fp == NULL)
             printf("Open source YUV file %s failed, use auto-generated YUV data\n", srcyuv_fn);
         else {
             struct stat tmp;
 
-            fstat(fileno(srcyuv_fp), &tmp);
+            int ret = fstat(fileno(srcyuv_fp), &tmp);
+            CHECK_CONDITION(ret == 0);
             srcyuv_frames = tmp.st_size / (frame_width * frame_height * 1.5);
             printf("Source YUV file %s with %llu frames\n", srcyuv_fn, srcyuv_frames);
 
@@ -2034,7 +1939,7 @@ static int process_cmdline(int argc, char *argv[])
 
     /* open source file */
     if (recyuv_fn) {
-        recyuv_fp = fopen(recyuv_fn,"w+");
+        recyuv_fp = fopen(recyuv_fn, "w+");
 
         if (recyuv_fp == NULL)
             printf("Open reconstructed YUV file %s failed\n", recyuv_fn);
@@ -2052,9 +1957,8 @@ static int process_cmdline(int argc, char *argv[])
 
     /* store coded data into a file */
     if (coded_fn) {
-        coded_fp = fopen(coded_fn,"w+");
-    }
-    else{
+        coded_fp = fopen(coded_fn, "w+");
+    } else {
         printf("Copy file string failed");
         exit(1);
     }
@@ -2070,7 +1974,7 @@ static int process_cmdline(int argc, char *argv[])
         printf("Source frame is %dx%d and will code clip to %dx%d with crop\n",
                frame_width, frame_height,
                frame_width_aligned, frame_height_aligned
-               );
+              );
     }
 
     return 0;
@@ -2078,7 +1982,7 @@ static int process_cmdline(int argc, char *argv[])
 
 static int init_va(void)
 {
-    VAProfile profile_list[]={VAProfileHEVCMain,VAProfileHEVCMain10};
+    VAProfile profile_list[] = {VAProfileHEVCMain, VAProfileHEVCMain10};
     VAEntrypoint *entrypoints;
     int num_entrypoints, slice_entrypoint;
     int support_encode = 0;
@@ -2098,14 +2002,15 @@ static int init_va(void)
     }
 
     /* use the highest profile */
-    for (i = 0; i < sizeof(profile_list)/sizeof(profile_list[0]); i++) {
+    for (i = 0; i < sizeof(profile_list) / sizeof(profile_list[0]); i++) {
         if ((hevc_profile != ~0) && hevc_profile != profile_list[i])
             continue;
 
         hevc_profile = profile_list[i];
         vaQueryConfigEntrypoints(va_dpy, hevc_profile, entrypoints, &num_entrypoints);
         for (slice_entrypoint = 0; slice_entrypoint < num_entrypoints; slice_entrypoint++) {
-            if (entrypoints[slice_entrypoint] == VAEntrypointEncSlice) {
+            if (entrypoints[slice_entrypoint] == VAEntrypointEncSlice ||
+                entrypoints[slice_entrypoint] == VAEntrypointEncSliceLP ) {
                 support_encode = 1;
                 break;
             }
@@ -2119,21 +2024,21 @@ static int init_va(void)
         exit(1);
     } else {
         switch (hevc_profile) {
-            case VAProfileHEVCMain:
-                hevc_profile = VAProfileHEVCMain;
-                printf("Use profile VAProfileHEVCMain\n");
-                break;
+        case VAProfileHEVCMain:
+            hevc_profile = VAProfileHEVCMain;
+            printf("Use profile VAProfileHEVCMain\n");
+            break;
 
-            case VAProfileHEVCMain10:
-                hevc_profile = VAProfileHEVCMain10;
-                printf("Use profile VAProfileHEVCMain10\n");
-                break;
-            default:
-                printf("unknow profile. Set to Main");
-                hevc_profile = VAProfileHEVCMain;
-                constraint_set_flag |= (1 << 0 | 1 << 1); /* Annex A.2.1 & A.2.2 */
-                ip_period = 1;
-                break;
+        case VAProfileHEVCMain10:
+            hevc_profile = VAProfileHEVCMain10;
+            printf("Use profile VAProfileHEVCMain10\n");
+            break;
+        default:
+            printf("unknow profile. Set to Main");
+            hevc_profile = VAProfileHEVCMain;
+            constraint_set_flag |= (1 << 0 | 1 << 1); /* Annex A.2.1 & A.2.2 */
+            ip_period = 1;
+            break;
         }
     }
 
@@ -2141,7 +2046,13 @@ static int init_va(void)
     for (i = 0; i < VAConfigAttribTypeMax; i++)
         attrib[i].type = i;
 
-    va_status = vaGetConfigAttributes(va_dpy, hevc_profile, VAEntrypointEncSlice,
+    if (lowpower)
+    {
+        entryPoint = VAEntrypointEncSliceLP;
+        LCU_SIZE = 64;
+    }
+
+    va_status = vaGetConfigAttributes(va_dpy, hevc_profile, entryPoint,
                                       &attrib[0], VAConfigAttribTypeMax);
     CHECK_VASTATUS(va_status, "vaGetConfigAttributes");
     /* check the interested configattrib */
@@ -2251,7 +2162,7 @@ static int init_va(void)
         hevc_maxref = attrib[VAConfigAttribEncMaxRefFrames].value;
 
         printf("Support %d RefPicList0 and %d RefPicList1\n",
-               hevc_maxref & 0xffff, (hevc_maxref >> 16) & 0xffff );
+               hevc_maxref & 0xffff, (hevc_maxref >> 16) & 0xffff);
     }
 
     if (attrib[VAConfigAttribEncMaxSlices].value != VA_ATTRIB_NOT_SUPPORTED)
@@ -2272,6 +2183,52 @@ static int init_va(void)
     if (attrib[VAConfigAttribEncMacroblockInfo].value != VA_ATTRIB_NOT_SUPPORTED) {
         printf("Support VAConfigAttribEncMacroblockInfo\n");
     }
+    if (attrib[VAConfigAttribEncHEVCBlockSizes].value != VA_ATTRIB_NOT_SUPPORTED) {
+        printf("Support VAConfigAttribEncHEVCBlockSizes\n");
+        uint32_t tmp = attrib[VAConfigAttribEncHEVCBlockSizes].value;
+        VAConfigAttribValEncHEVCBlockSizes bs = { .value = tmp };
+        block_sizes.log2_max_coding_tree_block_size_minus3 = bs.bits.log2_max_coding_tree_block_size_minus3;
+        block_sizes.log2_min_coding_tree_block_size_minus3 = bs.bits.log2_min_coding_tree_block_size_minus3;
+        block_sizes.log2_min_luma_coding_block_size_minus3 = bs.bits.log2_min_luma_coding_block_size_minus3;
+        block_sizes.log2_max_luma_transform_block_size_minus2 = bs.bits.log2_max_luma_transform_block_size_minus2;
+        block_sizes.log2_min_luma_transform_block_size_minus2 = bs.bits.log2_min_luma_transform_block_size_minus2;
+        block_sizes.log2_max_pcm_coding_block_size_minus3 = bs.bits.log2_max_pcm_coding_block_size_minus3;
+        block_sizes.log2_min_pcm_coding_block_size_minus3 = bs.bits.log2_min_pcm_coding_block_size_minus3;
+        block_sizes.max_max_transform_hierarchy_depth_inter = bs.bits.max_max_transform_hierarchy_depth_inter;
+        block_sizes.min_max_transform_hierarchy_depth_inter = bs.bits.min_max_transform_hierarchy_depth_inter;
+        block_sizes.max_max_transform_hierarchy_depth_intra = bs.bits.max_max_transform_hierarchy_depth_intra;
+        block_sizes.min_max_transform_hierarchy_depth_intra = bs.bits.min_max_transform_hierarchy_depth_intra;
+
+        use_block_sizes = 1;
+        config_attrib[config_attrib_num].type = VAConfigAttribEncHEVCBlockSizes;
+        config_attrib[config_attrib_num].value = tmp;
+        config_attrib_num++;
+    }
+    if (attrib[VAConfigAttribEncHEVCFeatures].value != VA_ATTRIB_NOT_SUPPORTED) {
+        printf("Support VAConfigAttribEncHEVCFeatures\n");
+        uint32_t tmp = attrib[VAConfigAttribEncHEVCFeatures].value;
+        VAConfigAttribValEncHEVCFeatures f = { .value = tmp };
+        features.amp = f.bits.amp;
+        features.constrained_intra_pred = f.bits.constrained_intra_pred;
+        features.cu_qp_delta = f.bits.cu_qp_delta;
+        features.deblocking_filter_disable = f.bits.deblocking_filter_disable;
+        features.dependent_slices = f.bits.dependent_slices;
+        features.pcm = f.bits.pcm;
+        features.sao = f.bits.sao;
+        features.scaling_lists = f.bits.scaling_lists;
+        features.separate_colour_planes = f.bits.separate_colour_planes;
+        features.sign_data_hiding = f.bits.sign_data_hiding;
+        features.strong_intra_smoothing = f.bits.strong_intra_smoothing;
+        features.temporal_mvp = f.bits.temporal_mvp;
+        features.transform_skip = f.bits.transform_skip;
+        features.transquant_bypass = f.bits.transquant_bypass;
+        features.weighted_prediction = f.bits.weighted_prediction;
+
+        use_features = 1;
+        config_attrib[config_attrib_num].type = VAConfigAttribEncHEVCFeatures;
+        config_attrib[config_attrib_num].value = attrib[VAConfigAttribEncHEVCFeatures].value;
+        config_attrib_num++;
+    }
 
     free(entrypoints);
     return 0;
@@ -2283,8 +2240,8 @@ static int setup_encode()
     VASurfaceID *tmp_surfaceid;
     int codedbuf_size, i;
 
-    va_status = vaCreateConfig(va_dpy, hevc_profile, VAEntrypointEncSlice,
-            &config_attrib[0], config_attrib_num, &config_id);
+    va_status = vaCreateConfig(va_dpy, hevc_profile, entryPoint,
+                               &config_attrib[0], config_attrib_num, &config_id);
     CHECK_VASTATUS(va_status, "vaCreateConfig");
 
     /* create source surfaces */
@@ -2296,11 +2253,11 @@ static int setup_encode()
 
     /* create reference surfaces */
     va_status = vaCreateSurfaces(
-        va_dpy,
-        VA_RT_FORMAT_YUV420, frame_width_aligned, frame_height_aligned,
-        &ref_surface[0], SURFACE_NUM,
-        NULL, 0
-        );
+                    va_dpy,
+                    VA_RT_FORMAT_YUV420, frame_width_aligned, frame_height_aligned,
+                    &ref_surface[0], SURFACE_NUM,
+                    NULL, 0
+                );
     CHECK_VASTATUS(va_status, "vaCreateSurfaces");
 
     tmp_surfaceid = calloc(2 * SURFACE_NUM, sizeof(VASurfaceID));
@@ -2318,7 +2275,7 @@ static int setup_encode()
     CHECK_VASTATUS(va_status, "vaCreateContext");
     free(tmp_surfaceid);
 
-    codedbuf_size = (frame_width_aligned * frame_height_aligned * 400) / (16*16);
+    codedbuf_size = ((long long int) frame_width_aligned * frame_height_aligned * 400) / (16 * 16);
 
     for (i = 0; i < SURFACE_NUM; i++) {
         /* create coded buffer once for all
@@ -2327,9 +2284,9 @@ static int setup_encode()
          * but coded buffer need to be mapped and accessed after vaRenderPicture/vaEndPicture
          * so VA won't maintain the coded buffer
          */
-        va_status = vaCreateBuffer(va_dpy,context_id,VAEncCodedBufferType,
-                codedbuf_size, 1, NULL, &coded_buf[i]);
-        CHECK_VASTATUS(va_status,"vaCreateBuffer");
+        va_status = vaCreateBuffer(va_dpy, context_id, VAEncCodedBufferType,
+                                   codedbuf_size, 1, NULL, &coded_buf[i]);
+        CHECK_VASTATUS(va_status, "vaCreateBuffer");
     }
 
     return 0;
@@ -2383,8 +2340,8 @@ static void sort_two(VAPictureHEVC ref[], int left, int right, unsigned int key,
 
     partition(ref, pic_order_cnt, (signed int)key, partition_ascending);
 
-    sort_one(ref, left, i-1, list0_ascending);
-    sort_one(ref, j+1, right, list1_ascending);
+    sort_one(ref, left, i - 1, list0_ascending);
+    sort_one(ref, j + 1, right, list1_ascending);
 }
 
 static int update_ReferenceFrames(void)
@@ -2397,8 +2354,8 @@ static int update_ReferenceFrames(void)
     numShortTerm++;
     if (numShortTerm > num_ref_frames)
         numShortTerm = num_ref_frames;
-    for (i=numShortTerm-1; i>0; i--)
-        ReferenceFrames[i] = ReferenceFrames[i-1];
+    for (i = numShortTerm - 1; i > 0; i--)
+        ReferenceFrames[i] = ReferenceFrames[i - 1];
     ReferenceFrames[0] = CurrentCurrPic;
 
     return 0;
@@ -2410,15 +2367,15 @@ static int update_RefPicList(void)
 
     if (current_frame_type == FRAME_P) {
         memcpy(RefPicList0_P, ReferenceFrames, numShortTerm * sizeof(VAPictureHEVC));
-        sort_one(RefPicList0_P, 0, numShortTerm-1, 0);
+        sort_one(RefPicList0_P, 0, numShortTerm - 1, 0);
     }
 
     if (current_frame_type == FRAME_B) {
         memcpy(RefPicList0_B, ReferenceFrames, numShortTerm * sizeof(VAPictureHEVC));
-        sort_two(RefPicList0_B, 0, numShortTerm-1, current_poc, 1, 0, 1);
+        sort_two(RefPicList0_B, 0, numShortTerm - 1, current_poc, 1, 0, 1);
 
         memcpy(RefPicList1_B, ReferenceFrames, numShortTerm * sizeof(VAPictureHEVC));
-        sort_two(RefPicList1_B, 0, numShortTerm-1, current_poc, 0, 1, 0);
+        sort_two(RefPicList1_B, 0, numShortTerm - 1, current_poc, 0, 1, 0);
     }
 
     return 0;
@@ -2430,7 +2387,7 @@ static int render_sequence(struct SeqParamSet *sps)
 
     VABufferID seq_param_buf = VA_INVALID_ID;
     VABufferID rc_param_buf = VA_INVALID_ID;
-    VABufferID misc_param_tmpbuf= VA_INVALID_ID;
+    VABufferID misc_param_tmpbuf = VA_INVALID_ID;
     VABufferID render_id[2] = {VA_INVALID_ID};
     VAStatus va_status;
     VAEncMiscParameterBuffer *misc_param, *misc_param_tmp;
@@ -2443,7 +2400,7 @@ static int render_sequence(struct SeqParamSet *sps)
     seq_param.intra_idr_period = intra_idr_period;
     seq_param.ip_period = ip_period;
 
-    seq_param.bits_per_second = 400000;
+    seq_param.bits_per_second = frame_bitrate;
     seq_param.pic_width_in_luma_samples = sps->pic_width_in_luma_samples;
     seq_param.pic_height_in_luma_samples = sps->pic_height_in_luma_samples;
 
@@ -2470,16 +2427,16 @@ static int render_sequence(struct SeqParamSet *sps)
 
     va_status = vaCreateBuffer(va_dpy, context_id,
                                VAEncSequenceParameterBufferType,
-                               sizeof(seq_param),1,&seq_param,&seq_param_buf);
-    CHECK_VASTATUS(va_status,"vaCreateBuffer");
+                               sizeof(seq_param), 1, &seq_param, &seq_param_buf);
+    CHECK_VASTATUS(va_status, "vaCreateBuffer");
 
     va_status = vaCreateBuffer(va_dpy, context_id,
                                VAEncMiscParameterBufferType,
                                sizeof(VAEncMiscParameterBuffer) + sizeof(VAEncMiscParameterRateControl),
-                               1,NULL,&rc_param_buf);
-    CHECK_VASTATUS(va_status,"vaCreateBuffer");
+                               1, NULL, &rc_param_buf);
+    CHECK_VASTATUS(va_status, "vaCreateBuffer");
 
-    vaMapBuffer(va_dpy, rc_param_buf,(void **)&misc_param);
+    vaMapBuffer(va_dpy, rc_param_buf, (void **)&misc_param);
     misc_param->type = VAEncMiscParameterTypeRateControl;
     misc_rate_ctrl = (VAEncMiscParameterRateControl *)misc_param->data;
     memset(misc_rate_ctrl, 0, sizeof(*misc_rate_ctrl));
@@ -2494,16 +2451,14 @@ static int render_sequence(struct SeqParamSet *sps)
     render_id[0] = seq_param_buf;
     render_id[1] = rc_param_buf;
 
-    va_status = vaRenderPicture(va_dpy,context_id, &render_id[0], 2);
-    CHECK_VASTATUS(va_status,"vaRenderPicture");
-    if (seq_param_buf != VA_INVALID_ID)
-    {
+    va_status = vaRenderPicture(va_dpy, context_id, &render_id[0], 2);
+    CHECK_VASTATUS(va_status, "vaRenderPicture");
+    if (seq_param_buf != VA_INVALID_ID) {
         vaDestroyBuffer(va_dpy, seq_param_buf);
         seq_param_buf = VA_INVALID_ID;
     }
 
-    if (rc_param_buf != VA_INVALID_ID)
-    {
+    if (rc_param_buf != VA_INVALID_ID) {
         vaDestroyBuffer(va_dpy, rc_param_buf);
         rc_param_buf = VA_INVALID_ID;
     }
@@ -2514,13 +2469,13 @@ static int render_sequence(struct SeqParamSet *sps)
                                    VAEncMiscParameterBufferType,
                                    sizeof(VAEncMiscParameterBuffer),
                                    1, NULL, &misc_param_tmpbuf);
-        CHECK_VASTATUS(va_status,"vaCreateBuffer");
-        vaMapBuffer(va_dpy, misc_param_tmpbuf,(void **)&misc_param_tmp);
+        CHECK_VASTATUS(va_status, "vaCreateBuffer");
+        vaMapBuffer(va_dpy, misc_param_tmpbuf, (void **)&misc_param_tmp);
         misc_param_tmp->type = misc_priv_type;
         misc_param_tmp->data[0] = misc_priv_value;
         vaUnmapBuffer(va_dpy, misc_param_tmpbuf);
 
-        va_status = vaRenderPicture(va_dpy,context_id, &misc_param_tmpbuf, 1);
+        va_status = vaRenderPicture(va_dpy, context_id, &misc_param_tmpbuf, 1);
     }
 
     return 0;
@@ -2532,15 +2487,15 @@ static int render_picture(struct PicParamSet *pps)
     VAStatus va_status;
     int i = 0;
 
-     memcpy(pic_param.reference_frames, ReferenceFrames, numShortTerm*sizeof(VAPictureHEVC));
-     for (i = numShortTerm; i < SURFACE_NUM; i++) {
-         pic_param.reference_frames[i].picture_id = VA_INVALID_SURFACE;
-         pic_param.reference_frames[i].flags = VA_PICTURE_HEVC_INVALID;
-     }
+    memcpy(pic_param.reference_frames, ReferenceFrames, numShortTerm * sizeof(VAPictureHEVC));
+    for (i = numShortTerm; i < SURFACE_NUM - 1; i++) {
+        pic_param.reference_frames[i].picture_id = VA_INVALID_SURFACE;
+        pic_param.reference_frames[i].flags = VA_PICTURE_HEVC_INVALID;
+    }
 
     pic_param.last_picture = 0;
-    pic_param.last_picture |= ((current_frame_encoding +1) %intra_period == 0) ? HEVC_LAST_PICTURE_EOSEQ : 0;
-    pic_param.last_picture |= ((current_frame_encoding +1) == frame_count) ? HEVC_LAST_PICTURE_EOSTREAM : 0;
+    pic_param.last_picture |= ((current_frame_encoding + 1) % intra_period == 0) ? HEVC_LAST_PICTURE_EOSEQ : 0;
+    pic_param.last_picture |= ((current_frame_encoding + 1) == frame_count) ? HEVC_LAST_PICTURE_EOSTREAM : 0;
     pic_param.coded_buf = coded_buf[current_slot];
 
     pic_param.decoded_curr_pic.picture_id = ref_surface[current_slot];
@@ -2556,12 +2511,10 @@ static int render_picture(struct PicParamSet *pps)
 
     pic_param.num_tile_columns_minus1 = pps->num_tile_columns_minus1;
     pic_param.num_tile_rows_minus1 = pps->num_tile_rows_minus1;
-    for (i = 0; i <= (unsigned int)(pic_param.num_tile_columns_minus1); i++)
-    {
+    for (i = 0; i <= (unsigned int)(pic_param.num_tile_columns_minus1); i++) {
         pic_param.column_width_minus1[i] = 0;
     }
-    for (i = 0; i <= (unsigned int)(pic_param.num_tile_rows_minus1); i++)
-    {
+    for (i = 0; i <= (unsigned int)(pic_param.num_tile_rows_minus1); i++) {
         pic_param.row_height_minus1[i] = 0;
     }
 
@@ -2571,8 +2524,8 @@ static int render_picture(struct PicParamSet *pps)
     pic_param.num_ref_idx_l1_default_active_minus1 = pps->num_ref_idx_l1_default_active_minus1;
     pic_param.slice_pic_parameter_set_id = 0;
     pic_param.pic_fields.bits.idr_pic_flag         = (current_frame_type == FRAME_IDR);
-    pic_param.pic_fields.bits.coding_type          = current_frame_type == FRAME_IDR ? FRAME_I:current_frame_type;
-    pic_param.pic_fields.bits.reference_pic_flag   = current_frame_type != FRAME_B ? 1: 0;
+    pic_param.pic_fields.bits.coding_type          = current_frame_type == FRAME_IDR ? FRAME_I : current_frame_type;
+    pic_param.pic_fields.bits.reference_pic_flag   = current_frame_type != FRAME_B ? 1 : 0;
     pic_param.pic_fields.bits.dependent_slice_segments_enabled_flag = pps->dependent_slice_segments_enabled_flag;
     pic_param.pic_fields.bits.sign_data_hiding_enabled_flag = pps->sign_data_hiding_enabled_flag;
     pic_param.pic_fields.bits.constrained_intra_pred_flag = pps->constrained_intra_pred_flag;
@@ -2587,15 +2540,14 @@ static int render_picture(struct PicParamSet *pps)
     pic_param.pic_fields.bits.pps_loop_filter_across_slices_enabled_flag = pps->pps_loop_filter_across_slices_enabled_flag;
     pic_param.pic_fields.bits.scaling_list_data_present_flag = pps->pps_scaling_list_data_present_flag;
 
-    va_status = vaCreateBuffer(va_dpy, context_id,VAEncPictureParameterBufferType,
-                               sizeof(pic_param),1,&pic_param, &pic_param_buf);
-    CHECK_VASTATUS(va_status,"vaCreateBuffer");;
+    va_status = vaCreateBuffer(va_dpy, context_id, VAEncPictureParameterBufferType,
+                               sizeof(pic_param), 1, &pic_param, &pic_param_buf);
+    CHECK_VASTATUS(va_status, "vaCreateBuffer");;
 
-    va_status = vaRenderPicture(va_dpy,context_id, &pic_param_buf, 1);
-    CHECK_VASTATUS(va_status,"vaRenderPicture");
+    va_status = vaRenderPicture(va_dpy, context_id, &pic_param_buf, 1);
+    CHECK_VASTATUS(va_status, "vaRenderPicture");
 
-    if(pic_param_buf != VA_INVALID_ID)
-    {
+    if (pic_param_buf != VA_INVALID_ID) {
         vaDestroyBuffer(va_dpy, pic_param_buf);
         pic_param_buf = VA_INVALID_ID;
     }
@@ -2625,29 +2577,27 @@ static int render_packedvideo(void)
                                VAEncPackedHeaderParameterBufferType,
                                sizeof(packedheader_param_buffer), 1, &packedheader_param_buffer,
                                &packedvideo_para_bufid);
-    CHECK_VASTATUS(va_status,"vaCreateBuffer");
+    CHECK_VASTATUS(va_status, "vaCreateBuffer");
 
     va_status = vaCreateBuffer(va_dpy,
                                context_id,
                                VAEncPackedHeaderDataBufferType,
                                (length_in_bits + 7) / 8, 1, packedvideo_buffer,
                                &packedvideo_data_bufid);
-    CHECK_VASTATUS(va_status,"vaCreateBuffer");
+    CHECK_VASTATUS(va_status, "vaCreateBuffer");
 
     render_id[0] = packedvideo_para_bufid;
     render_id[1] = packedvideo_data_bufid;
-    va_status = vaRenderPicture(va_dpy,context_id, render_id, 2);
-    CHECK_VASTATUS(va_status,"vaRenderPicture");
+    va_status = vaRenderPicture(va_dpy, context_id, render_id, 2);
+    CHECK_VASTATUS(va_status, "vaRenderPicture");
 
     free(packedvideo_buffer);
 
-    if(packedvideo_para_bufid != VA_INVALID_ID)
-    {
+    if (packedvideo_para_bufid != VA_INVALID_ID) {
         vaDestroyBuffer(va_dpy, packedvideo_para_bufid);
         packedvideo_para_bufid = VA_INVALID_ID;
     }
-    if(packedvideo_data_bufid != VA_INVALID_ID)
-    {
+    if (packedvideo_data_bufid != VA_INVALID_ID) {
         vaDestroyBuffer(va_dpy, packedvideo_data_bufid);
         packedvideo_data_bufid = VA_INVALID_ID;
     }
@@ -2676,29 +2626,27 @@ static int render_packedsequence(void)
                                VAEncPackedHeaderParameterBufferType,
                                sizeof(packedheader_param_buffer), 1, &packedheader_param_buffer,
                                &packedseq_para_bufid);
-    CHECK_VASTATUS(va_status,"vaCreateBuffer");
+    CHECK_VASTATUS(va_status, "vaCreateBuffer");
 
     va_status = vaCreateBuffer(va_dpy,
                                context_id,
                                VAEncPackedHeaderDataBufferType,
                                (length_in_bits + 7) / 8, 1, packedseq_buffer,
                                &packedseq_data_bufid);
-    CHECK_VASTATUS(va_status,"vaCreateBuffer");
+    CHECK_VASTATUS(va_status, "vaCreateBuffer");
 
     render_id[0] = packedseq_para_bufid;
     render_id[1] = packedseq_data_bufid;
-    va_status = vaRenderPicture(va_dpy,context_id, render_id, 2);
-    CHECK_VASTATUS(va_status,"vaRenderPicture");
+    va_status = vaRenderPicture(va_dpy, context_id, render_id, 2);
+    CHECK_VASTATUS(va_status, "vaRenderPicture");
 
     free(packedseq_buffer);
 
-    if(packedseq_para_bufid != VA_INVALID_ID)
-    {
+    if (packedseq_para_bufid != VA_INVALID_ID) {
         vaDestroyBuffer(va_dpy, packedseq_para_bufid);
         packedseq_para_bufid = VA_INVALID_ID;
     }
-    if(packedseq_data_bufid != VA_INVALID_ID)
-    {
+    if (packedseq_data_bufid != VA_INVALID_ID) {
         vaDestroyBuffer(va_dpy, packedseq_data_bufid);
         packedseq_para_bufid = VA_INVALID_ID;
     }
@@ -2727,29 +2675,27 @@ static int render_packedpicture(void)
                                VAEncPackedHeaderParameterBufferType,
                                sizeof(packedheader_param_buffer), 1, &packedheader_param_buffer,
                                &packedpic_para_bufid);
-    CHECK_VASTATUS(va_status,"vaCreateBuffer");
+    CHECK_VASTATUS(va_status, "vaCreateBuffer");
 
     va_status = vaCreateBuffer(va_dpy,
                                context_id,
                                VAEncPackedHeaderDataBufferType,
                                (length_in_bits + 7) / 8, 1, packedpic_buffer,
                                &packedpic_data_bufid);
-    CHECK_VASTATUS(va_status,"vaCreateBuffer");
+    CHECK_VASTATUS(va_status, "vaCreateBuffer");
 
     render_id[0] = packedpic_para_bufid;
     render_id[1] = packedpic_data_bufid;
-    va_status = vaRenderPicture(va_dpy,context_id, render_id, 2);
-    CHECK_VASTATUS(va_status,"vaRenderPicture");
+    va_status = vaRenderPicture(va_dpy, context_id, render_id, 2);
+    CHECK_VASTATUS(va_status, "vaRenderPicture");
 
     free(packedpic_buffer);
 
-    if(packedpic_para_bufid != VA_INVALID_ID)
-    {
+    if (packedpic_para_bufid != VA_INVALID_ID) {
         vaDestroyBuffer(va_dpy, packedpic_para_bufid);
         packedpic_para_bufid = VA_INVALID_ID;
     }
-    if(packedpic_data_bufid != VA_INVALID_ID)
-    {
+    if (packedpic_data_bufid != VA_INVALID_ID) {
         vaDestroyBuffer(va_dpy, packedpic_data_bufid);
         packedpic_para_bufid = VA_INVALID_ID;
     }
@@ -2777,29 +2723,27 @@ static void render_packedslice()
                                VAEncPackedHeaderParameterBufferType,
                                sizeof(packedheader_param_buffer), 1, &packedheader_param_buffer,
                                &packedslice_para_bufid);
-    CHECK_VASTATUS(va_status,"vaCreateBuffer");
+    CHECK_VASTATUS(va_status, "vaCreateBuffer");
 
     va_status = vaCreateBuffer(va_dpy,
                                context_id,
                                VAEncPackedHeaderDataBufferType,
                                (length_in_bits + 7) / 8, 1, packedslice_buffer,
                                &packedslice_data_bufid);
-    CHECK_VASTATUS(va_status,"vaCreateBuffer");
+    CHECK_VASTATUS(va_status, "vaCreateBuffer");
 
     render_id[0] = packedslice_para_bufid;
     render_id[1] = packedslice_data_bufid;
-    va_status = vaRenderPicture(va_dpy,context_id, render_id, 2);
-    CHECK_VASTATUS(va_status,"vaRenderPicture");
+    va_status = vaRenderPicture(va_dpy, context_id, render_id, 2);
+    CHECK_VASTATUS(va_status, "vaRenderPicture");
 
     free(packedslice_buffer);
 
-    if(packedslice_para_bufid != VA_INVALID_ID)
-    {
+    if (packedslice_para_bufid != VA_INVALID_ID) {
         vaDestroyBuffer(va_dpy, packedslice_para_bufid);
         packedslice_para_bufid = VA_INVALID_ID;
     }
-    if(packedslice_data_bufid != VA_INVALID_ID)
-    {
+    if (packedslice_data_bufid != VA_INVALID_ID) {
         vaDestroyBuffer(va_dpy, packedslice_data_bufid);
         packedslice_para_bufid = VA_INVALID_ID;
     }
@@ -2814,7 +2758,7 @@ static int render_slice(void)
     update_RefPicList();
 
     slice_param.slice_segment_address = 0;
-    slice_param.num_ctu_in_slice = ssh.picture_width_in_ctus *ssh.picture_height_in_ctus;
+    slice_param.num_ctu_in_slice = ssh.picture_width_in_ctus * ssh.picture_height_in_ctus;
     slice_param.slice_type = ssh.slice_type;
     slice_param.slice_pic_parameter_set_id = ssh.slice_pic_parameter_set_id; // right???
 
@@ -2825,8 +2769,7 @@ static int render_slice(void)
 
     if (current_frame_type == FRAME_P) {
         memcpy(slice_param.ref_pic_list0, RefPicList0_P, sizeof(VAPictureHEVC));
-        if(p2b)
-        {
+        if (p2b) {
             memcpy(slice_param.ref_pic_list1, RefPicList0_P, sizeof(VAPictureHEVC));
         }
     } else if (current_frame_type == FRAME_B) {
@@ -2861,15 +2804,14 @@ static int render_slice(void)
         config_attrib[enc_packed_header_idx].value & VA_ENC_PACKED_HEADER_SLICE)
         render_packedslice();
 
-    va_status = vaCreateBuffer(va_dpy,context_id,VAEncSliceParameterBufferType,
-                               sizeof(slice_param),1,&slice_param,&slice_param_buf);
-    CHECK_VASTATUS(va_status,"vaCreateBuffer");;
+    va_status = vaCreateBuffer(va_dpy, context_id, VAEncSliceParameterBufferType,
+                               sizeof(slice_param), 1, &slice_param, &slice_param_buf);
+    CHECK_VASTATUS(va_status, "vaCreateBuffer");;
 
-    va_status = vaRenderPicture(va_dpy,context_id, &slice_param_buf, 1);
-    CHECK_VASTATUS(va_status,"vaRenderPicture");
+    va_status = vaRenderPicture(va_dpy, context_id, &slice_param_buf, 1);
+    CHECK_VASTATUS(va_status, "vaRenderPicture");
 
-    if (slice_param_buf != VA_INVALID_ID)
-    {
+    if (slice_param_buf != VA_INVALID_ID) {
         vaDestroyBuffer(va_dpy, slice_param_buf);
         slice_param_buf = VA_INVALID_ID;
     }
@@ -2880,8 +2822,8 @@ static int render_slice(void)
 
 static int upload_source_YUV_once_for_all()
 {
-    int box_width=8;
-    int row_shift=0;
+    int box_width = 8;
+    int row_shift = 0;
     int i;
 
     for (i = 0; i < SURFACE_NUM; i++) {
@@ -2889,7 +2831,7 @@ static int upload_source_YUV_once_for_all()
         upload_surface(va_dpy, src_surface[i], box_width, row_shift, 0);
 
         row_shift++;
-        if (row_shift==(2*box_width)) row_shift= 0;
+        if (row_shift == (2 * box_width)) row_shift = 0;
     }
     printf("Complete surface loading\n");
 
@@ -2919,20 +2861,20 @@ static int load_surface(VASurfaceID surface_id, unsigned long long display_order
         printf("Failed to mmap YUV file (%s)\n", strerror(errno));
         return 1;
     }
-    srcyuv_ptr = (unsigned char *)mmap_ptr +  (frame_start & 0xfff);
+    srcyuv_ptr = (unsigned char *)mmap_ptr + (frame_start & 0xfff);
     if (srcyuv_fourcc == VA_FOURCC_NV12) {
         src_Y = srcyuv_ptr;
         src_U = src_Y + frame_width * frame_height;
         src_V = NULL;
     } else if (srcyuv_fourcc == VA_FOURCC_IYUV ||
-        srcyuv_fourcc == VA_FOURCC_YV12) {
+               srcyuv_fourcc == VA_FOURCC_YV12) {
         src_Y = srcyuv_ptr;
         if (srcyuv_fourcc == VA_FOURCC_IYUV) {
             src_U = src_Y + frame_width * frame_height;
-            src_V = src_U + (frame_width/2) * (frame_height/2);
+            src_V = src_U + (frame_width / 2) * (frame_height / 2);
         } else { /* YV12 */
             src_V = src_Y + frame_width * frame_height;
-            src_U = src_V + (frame_width/2) * (frame_height/2);
+            src_U = src_V + (frame_width / 2) * (frame_height / 2);
         }
     } else {
         printf("Unsupported source YUV format\n");
@@ -2959,47 +2901,47 @@ static int save_recyuv(VASurfaceID surface_id,
         return 0;
 
     if (srcyuv_fourcc == VA_FOURCC_NV12) {
-        int uv_size = 2 * (frame_width/2) * (frame_height/2);
-        dst_Y = malloc(2*uv_size);
-        if(dst_Y == NULL) {
-           printf("Failed to allocate memory for dst_Y\n");
-           exit(1);
+        int uv_size = 2 * (frame_width / 2) * (frame_height / 2);
+        dst_Y = malloc(2 * uv_size);
+        if (dst_Y == NULL) {
+            printf("Failed to allocate memory for dst_Y\n");
+            exit(1);
         }
 
         dst_U = malloc(uv_size);
-        if(dst_U == NULL) {
-           printf("Failed to allocate memory for dst_U\n");
-           free(dst_Y);
-           exit(1);
+        if (dst_U == NULL) {
+            printf("Failed to allocate memory for dst_U\n");
+            free(dst_Y);
+            exit(1);
         }
 
-        memset(dst_Y, 0, 2*uv_size);
+        memset(dst_Y, 0, 2 * uv_size);
         memset(dst_U, 0, uv_size);
     } else if (srcyuv_fourcc == VA_FOURCC_IYUV ||
                srcyuv_fourcc == VA_FOURCC_YV12) {
-        int uv_size = (frame_width/2) * (frame_height/2);
-        dst_Y = malloc(4*uv_size);
-        if(dst_Y == NULL) {
-           printf("Failed to allocate memory for dst_Y\n");
-           exit(1);
+        int uv_size = (frame_width / 2) * (frame_height / 2);
+        dst_Y = malloc(4 * uv_size);
+        if (dst_Y == NULL) {
+            printf("Failed to allocate memory for dst_Y\n");
+            exit(1);
         }
 
         dst_U = malloc(uv_size);
-        if(dst_U == NULL) {
-           printf("Failed to allocate memory for dst_U\n");
-           free(dst_Y);
-           exit(1);
+        if (dst_U == NULL) {
+            printf("Failed to allocate memory for dst_U\n");
+            free(dst_Y);
+            exit(1);
         }
 
         dst_V = malloc(uv_size);
-        if(dst_V == NULL) {
-           printf("Failed to allocate memory for dst_V\n");
-           free(dst_Y);
-           free(dst_U);
-           exit(1);
+        if (dst_V == NULL) {
+            printf("Failed to allocate memory for dst_V\n");
+            free(dst_Y);
+            free(dst_U);
+            exit(1);
         }
 
-        memset(dst_Y, 0, 4*uv_size);
+        memset(dst_Y, 0, 4 * uv_size);
         memset(dst_U, 0, uv_size);
         memset(dst_V, 0, uv_size);
     } else {
@@ -3013,12 +2955,12 @@ static int save_recyuv(VASurfaceID surface_id,
     fseek(recyuv_fp, display_order * frame_width * frame_height * 1.5, SEEK_SET);
 
     if (srcyuv_fourcc == VA_FOURCC_NV12) {
-        int uv_size = 2 * (frame_width/2) * (frame_height/2);
+        int uv_size = 2 * (frame_width / 2) * (frame_height / 2);
         fwrite(dst_Y, uv_size * 2, 1, recyuv_fp);
         fwrite(dst_U, uv_size, 1, recyuv_fp);
     } else if (srcyuv_fourcc == VA_FOURCC_IYUV ||
                srcyuv_fourcc == VA_FOURCC_YV12) {
-        int uv_size = (frame_width/2) * (frame_height/2);
+        int uv_size = (frame_width / 2) * (frame_height / 2);
         fwrite(dst_Y, uv_size * 4, 1, recyuv_fp);
 
         if (srcyuv_fourcc == VA_FOURCC_IYUV) {
@@ -3049,33 +2991,33 @@ static int save_codeddata(unsigned long long display_order, unsigned long long e
     VAStatus va_status;
     unsigned int coded_size = 0;
 
-    va_status = vaMapBuffer(va_dpy,coded_buf[display_order % SURFACE_NUM],(void **)(&buf_list));
-    CHECK_VASTATUS(va_status,"vaMapBuffer");
+    va_status = vaMapBuffer(va_dpy, coded_buf[display_order % SURFACE_NUM], (void **)(&buf_list));
+    CHECK_VASTATUS(va_status, "vaMapBuffer");
     while (buf_list != NULL) {
         coded_size += fwrite(buf_list->buf, 1, buf_list->size, coded_fp);
         buf_list = (VACodedBufferSegment *) buf_list->next;
 
         frame_size += coded_size;
     }
-    vaUnmapBuffer(va_dpy,coded_buf[display_order % SURFACE_NUM]);
+    vaUnmapBuffer(va_dpy, coded_buf[display_order % SURFACE_NUM]);
 
     printf("\n      "); /* return back to startpoint */
     switch (encode_order % 4) {
-        case 0:
-            printf("|");
-            break;
-        case 1:
-            printf("/");
-            break;
-        case 2:
-            printf("-");
-            break;
-        case 3:
-            printf("\\");
-            break;
+    case 0:
+        printf("|");
+        break;
+    case 1:
+        printf("/");
+        break;
+    case 2:
+        printf("-");
+        break;
+    case 3:
+        printf("\\");
+        break;
     }
     printf("%08lld", encode_order);
-    printf("(%06d bytes coded)\n",coded_size);
+    printf("(%06d bytes coded)\n", coded_size);
 
     fflush(coded_fp);
 
@@ -3136,7 +3078,7 @@ static void storage_task(unsigned long long display_order, unsigned long long en
 
     tmp = GetTickCount();
     va_status = vaSyncSurface(va_dpy, src_surface[display_order % SURFACE_NUM]);
-    CHECK_VASTATUS(va_status,"vaSyncSurface");
+    CHECK_VASTATUS(va_status, "vaSyncSurface");
     SyncPictureTicks += GetTickCount() - tmp;
     tmp = GetTickCount();
     save_codeddata(display_order, encode_order);
@@ -3223,7 +3165,7 @@ static int encode_frames(void)
 
         tmp = GetTickCount();
         va_status = vaBeginPicture(va_dpy, context_id, src_surface[current_slot]);
-        CHECK_VASTATUS(va_status,"vaBeginPicture");
+        CHECK_VASTATUS(va_status, "vaBeginPicture");
         BeginPictureTicks += GetTickCount() - tmp;
         fill_vps_header(&vps);
         fill_sps_header(&sps, 0);
@@ -3241,8 +3183,8 @@ static int encode_frames(void)
         RenderPictureTicks += GetTickCount() - tmp;
 
         tmp = GetTickCount();
-        va_status = vaEndPicture(va_dpy,context_id);
-        CHECK_VASTATUS(va_status,"vaEndPicture");;
+        va_status = vaEndPicture(va_dpy, context_id);
+        CHECK_VASTATUS(va_status, "vaEndPicture");;
         EndPictureTicks += GetTickCount() - tmp;
 
         if (encode_syncmode)
@@ -3266,14 +3208,14 @@ static int release_encode()
 {
     int i;
 
-    vaDestroySurfaces(va_dpy,&src_surface[0],SURFACE_NUM);
-    vaDestroySurfaces(va_dpy,&ref_surface[0],SURFACE_NUM);
+    vaDestroySurfaces(va_dpy, &src_surface[0], SURFACE_NUM);
+    vaDestroySurfaces(va_dpy, &ref_surface[0], SURFACE_NUM);
 
     for (i = 0; i < SURFACE_NUM; i++)
-        vaDestroyBuffer(va_dpy,coded_buf[i]);
+        vaDestroyBuffer(va_dpy, coded_buf[i]);
 
-    vaDestroyContext(va_dpy,context_id);
-    vaDestroyConfig(va_dpy,config_id);
+    vaDestroyContext(va_dpy, context_id);
+    vaDestroyConfig(va_dpy, config_id);
 
     return 0;
 }
@@ -3304,7 +3246,8 @@ static int print_input()
     printf("INPUT: Initial QP   : %d\n", initial_qp);
     printf("INPUT: Min QP       : %d\n", minimal_qp);
     printf("INPUT: P As B       : %d\n", p2b);
-    printf("INPUT: Source YUV   : %s", srcyuv_fp?"FILE":"AUTO generated");
+    printf("INPUT: lowpower     : %d\n", lowpower);
+    printf("INPUT: Source YUV   : %s", srcyuv_fp ? "FILE" : "AUTO generated");
     if (srcyuv_fp)
         printf(":%s (fourcc %s)\n", srcyuv_fn, fourcc_to_string(srcyuv_fourcc));
     else
@@ -3325,12 +3268,12 @@ static int calc_PSNR(double *psnr)
 {
     char *srcyuv_ptr = NULL, *recyuv_ptr = NULL, tmp;
     unsigned long long min_size;
-    unsigned long long i, sse=0;
+    unsigned long long i, sse = 0;
     double ssemean;
     int fourM = 0x400000; /* 4M */
 
     min_size = MIN(srcyuv_frames, frame_count) * frame_width * frame_height * 1.5;
-    for (i=0; i<min_size; i++) {
+    for (i = 0; i < min_size; i++) {
         unsigned long long j = i % fourM;
 
         if ((i % fourM) == 0) {
@@ -3342,6 +3285,10 @@ static int calc_PSNR(double *psnr)
             srcyuv_ptr = mmap(0, fourM, PROT_READ, MAP_SHARED, fileno(srcyuv_fp), i);
             recyuv_ptr = mmap(0, fourM, PROT_READ, MAP_SHARED, fileno(recyuv_fp), i);
             if ((srcyuv_ptr == MAP_FAILED) || (recyuv_ptr == MAP_FAILED)) {
+                if (srcyuv_ptr != MAP_FAILED) 
+                    munmap(srcyuv_ptr, fourM);
+                if (recyuv_ptr != MAP_FAILED) 
+                    munmap(recyuv_ptr, fourM);
                 printf("Failed to mmap YUV files\n");
                 return 1;
             }
@@ -3349,8 +3296,8 @@ static int calc_PSNR(double *psnr)
         tmp = srcyuv_ptr[j] - recyuv_ptr[j];
         sse += tmp * tmp;
     }
-    ssemean = (double)sse/(double)min_size;
-    *psnr = 20.0*log10(255) - 10.0*log10(ssemean);
+    ssemean = (double)sse / (double)min_size;
+    *psnr = 20.0 * log10(255) - 10.0 * log10(ssemean);
 
     if (srcyuv_ptr)
         munmap(srcyuv_ptr, fourM);
@@ -3369,12 +3316,12 @@ static int print_performance(unsigned int PictureCount)
         psnr_ret = calc_PSNR(&psnr);
 
     others = TotalTicks - UploadPictureTicks - BeginPictureTicks
-        - RenderPictureTicks - EndPictureTicks - SyncPictureTicks - SavePictureTicks;
+             - RenderPictureTicks - EndPictureTicks - SyncPictureTicks - SavePictureTicks;
 
     printf("\n\n");
 
     printf("PERFORMANCE:   Frame Rate           : %.2f fps (%d frames, %d ms (%.2f ms per frame))\n",
-           (double) 1000*PictureCount / TotalTicks, PictureCount,
+           (double) 1000 * PictureCount / TotalTicks, PictureCount,
            TotalTicks, ((double)  TotalTicks) / (double) PictureCount);
     printf("PERFORMANCE:   Compression ratio    : %d:1\n", (unsigned int)(total_size / frame_size));
     if (psnr_ret == 0)
@@ -3383,25 +3330,25 @@ static int print_performance(unsigned int PictureCount)
 
     printf("PERFORMANCE:     UploadPicture      : %d ms (%.2f, %.2f%% percent)\n",
            (int) UploadPictureTicks, ((double)  UploadPictureTicks) / (double) PictureCount,
-           UploadPictureTicks/(double) TotalTicks/0.01);
+           UploadPictureTicks / (double) TotalTicks / 0.01);
     printf("PERFORMANCE:     vaBeginPicture     : %d ms (%.2f, %.2f%% percent)\n",
            (int) BeginPictureTicks, ((double)  BeginPictureTicks) / (double) PictureCount,
-           BeginPictureTicks/(double) TotalTicks/0.01);
+           BeginPictureTicks / (double) TotalTicks / 0.01);
     printf("PERFORMANCE:     vaRenderHeader     : %d ms (%.2f, %.2f%% percent)\n",
            (int) RenderPictureTicks, ((double)  RenderPictureTicks) / (double) PictureCount,
-           RenderPictureTicks/(double) TotalTicks/0.01);
+           RenderPictureTicks / (double) TotalTicks / 0.01);
     printf("PERFORMANCE:     vaEndPicture       : %d ms (%.2f, %.2f%% percent)\n",
            (int) EndPictureTicks, ((double)  EndPictureTicks) / (double) PictureCount,
-           EndPictureTicks/(double) TotalTicks/0.01);
+           EndPictureTicks / (double) TotalTicks / 0.01);
     printf("PERFORMANCE:     vaSyncSurface      : %d ms (%.2f, %.2f%% percent)\n",
            (int) SyncPictureTicks, ((double) SyncPictureTicks) / (double) PictureCount,
-           SyncPictureTicks/(double) TotalTicks/0.01);
+           SyncPictureTicks / (double) TotalTicks / 0.01);
     printf("PERFORMANCE:     SavePicture        : %d ms (%.2f, %.2f%% percent)\n",
            (int) SavePictureTicks, ((double)  SavePictureTicks) / (double) PictureCount,
-           SavePictureTicks/(double) TotalTicks/0.01);
+           SavePictureTicks / (double) TotalTicks / 0.01);
     printf("PERFORMANCE:     Others             : %d ms (%.2f, %.2f%% percent)\n",
            (int) others, ((double) others) / (double) PictureCount,
-           others/(double) TotalTicks/0.01);
+           others / (double) TotalTicks / 0.01);
 
     if (encode_syncmode == 0)
         printf("(Multithread enabled, the timing is only for reference)\n");
@@ -3410,10 +3357,11 @@ static int print_performance(unsigned int PictureCount)
 }
 
 
-int main(int argc,char **argv)
+int main(int argc, char **argv)
 {
     unsigned int start;
 
+    va_init_display_args(&argc, argv);
     process_cmdline(argc, argv);
 
     print_input();

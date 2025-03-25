@@ -24,10 +24,11 @@
 
 #include "test_va_api_fixture.h"
 
-namespace VAAPI {
+namespace VAAPI
+{
 
 class VAAPIConfigAttribs
-    : public VAAPIFixture
+    : public VAAPIFixtureSharedDisplay
     , public ::testing::WithParamInterface<std::tuple<VAProfile, VAEntrypoint> >
 {
 public:
@@ -40,21 +41,8 @@ protected:
     const VAProfile& profile;
     const VAEntrypoint& entrypoint;
 
-    virtual void SetUp()
-    {
-        VAAPIFixture::SetUp();
-        doInitialize();
-        ASSERT_FALSE(HasFailure());
-    }
-
-    virtual void TearDown()
-    {
-        doTerminate();
-        VAAPIFixture::TearDown();
-    }
-
     void validateConfigAttributes(const ConfigAttributes& actual,
-        const ConfigAttributes& supported) const
+                                  const ConfigAttributes& supported) const
     {
         const size_t size(actual.size());
         ASSERT_EQ(size, supported.size());
@@ -107,7 +95,7 @@ TEST_P(VAAPIConfigAttribs, GetConfigAttribs)
     // should be consistent with supported attribute values returned by
     // vaGetConfigAttributes.
 
-    if (not isSupported(profile, entrypoint)) {
+    if (!isSupported(profile, entrypoint)) {
         skipTest(profile, entrypoint);
         return;
     }
@@ -126,7 +114,9 @@ TEST_P(VAAPIConfigAttribs, GetConfigAttribs)
     // can get the supported values for them.
     ConfigAttributes supported = actual;
     std::for_each(supported.begin(), supported.end(),
-        [](VAConfigAttrib& s) { s.value = 0; });
+    [](VAConfigAttrib & s) {
+        s.value = 0;
+    });
 
     // get supported config attribute values
     getConfigAttributes(profile, entrypoint, supported);
@@ -135,9 +125,9 @@ TEST_P(VAAPIConfigAttribs, GetConfigAttribs)
     validateConfigAttributes(actual, supported);
 }
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     Attributes, VAAPIConfigAttribs,
     ::testing::Combine(::testing::ValuesIn(g_vaProfiles),
-        ::testing::ValuesIn(g_vaEntrypoints)));
+                       ::testing::ValuesIn(g_vaEntrypoints)));
 
 } // namespace VAAPI

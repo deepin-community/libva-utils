@@ -24,6 +24,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #ifdef IN_LIBVA
@@ -31,25 +32,29 @@
 #else
 # include <va/va_drm.h>
 #endif
+#include <xf86drm.h>
 #include "va_display.h"
+#include <sys/utsname.h>
 
 static int drm_fd = -1;
-extern const char *g_drm_device_name;
+extern const char *g_device_name;
 
 static VADisplay
 va_open_display_drm(void)
 {
     VADisplay va_dpy;
     int i;
-
+    drmVersionPtr version;
     static const char *drm_device_paths[] = {
         "/dev/dri/renderD128",
         "/dev/dri/card0",
+        "/dev/dri/renderD129",
+        "/dev/dri/card1",
         NULL
     };
 
-    if (g_drm_device_name) {
-        drm_fd = open(g_drm_device_name, O_RDWR);
+    if (g_device_name) {
+        drm_fd = open(g_device_name, O_RDWR);
         if (drm_fd < 0) {
             printf("Failed to open the given device!\n");
             exit(1);
@@ -71,6 +76,25 @@ va_open_display_drm(void)
         drm_fd = open(drm_device_paths[i], O_RDWR);
         if (drm_fd < 0)
             continue;
+
+        version = drmGetVersion(drm_fd);
+        if (!version) {
+            close(drm_fd);
+            continue;
+        }
+        /* On normal Linux platforms we do not want vgem.
+        *  Yet Windows subsystem for linux uses vgem,
+        *  while also providing a fallback VA driver.
+        *  See https://github.com/intel/libva/pull/688
+        */
+        struct utsname sysinfo = {};
+        if (!strncmp(version->name, "vgem", 4) && (uname(&sysinfo) >= 0) &&
+            !strstr(sysinfo.release, "WSL")) {
+            drmFreeVersion(version);
+            close(drm_fd);
+            continue;
+        }
+        drmFreeVersion(version);
 
         va_dpy = vaGetDisplayDRM(drm_fd);
         if (va_dpy)
